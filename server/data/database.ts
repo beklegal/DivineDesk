@@ -282,6 +282,17 @@ function getExternalDatabaseUrl() {
 const EXTERNAL_DATABASE_URL = getExternalDatabaseUrl();
 const USE_EXTERNAL_DATABASE = Boolean(EXTERNAL_DATABASE_URL);
 
+interface ExternalDatabasePool {
+  query<R extends Record<string, unknown> = Record<string, unknown>>(
+    text: string,
+    values?: unknown[],
+  ): Promise<{
+    rows: R[];
+    rowCount?: number | null;
+  }>;
+  end(): Promise<void>;
+}
+
 function clone<T>(value: T): T {
   return structuredClone(value);
 }
@@ -564,13 +575,17 @@ async function createExternalDatabasePool() {
     throw new Error("External database URL is not configured");
   }
 
-  return new Pool({
+  const PoolConstructor = Pool as unknown as {
+    new (config: { connectionString: string }): ExternalDatabasePool;
+  };
+
+  return new PoolConstructor({
     connectionString: EXTERNAL_DATABASE_URL,
   });
 }
 
 async function withExternalDatabaseClient<T>(
-  work: (pool: Pool) => Promise<T>,
+  work: (pool: ExternalDatabasePool) => Promise<T>,
 ) {
   const pool = await createExternalDatabasePool();
 
@@ -581,7 +596,7 @@ async function withExternalDatabaseClient<T>(
   }
 }
 
-async function ensureExternalDatabaseSchema(pool: Pool) {
+async function ensureExternalDatabaseSchema(pool: ExternalDatabasePool) {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS ${APP_STATE_TABLE} (
       id SMALLINT PRIMARY KEY,
@@ -592,7 +607,7 @@ async function ensureExternalDatabaseSchema(pool: Pool) {
   `);
 }
 
-async function ensureExternalDatabaseRow(pool: Pool) {
+async function ensureExternalDatabaseRow(pool: ExternalDatabasePool) {
   await ensureExternalDatabaseSchema(pool);
 
   const existing = await pool.query(
