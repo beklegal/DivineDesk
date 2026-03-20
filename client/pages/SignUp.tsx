@@ -183,6 +183,7 @@ export default function SignUp() {
                   id="email"
                   name="email"
                   type="email"
+                  autoComplete="email"
                   placeholder="admin@church.com"
                   value={formData.email}
                   onChange={handleInputChange}
@@ -198,6 +199,7 @@ export default function SignUp() {
                   id="password"
                   name="password"
                   type="password"
+                  autoComplete="new-password"
                   placeholder="Create a secure password"
                   value={formData.password}
                   onChange={handleInputChange}

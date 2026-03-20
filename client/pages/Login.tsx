@@ -145,6 +145,7 @@ export default function Login() {
               <Input
                 id="email"
                 type="email"
+                autoComplete="email"
                 placeholder="admin@church.com"
                 value={email}
                 onChange={(event) => {
@@ -162,6 +163,7 @@ export default function Login() {
               <Input
                 id="password"
                 type="password"
+                autoComplete="current-password"
                 placeholder="Enter your password"
                 value={password}
                 onChange={(event) => {
