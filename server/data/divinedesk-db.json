@@ -1,0 +1,183 @@
+{
+  "meta": {
+    "version": 1,
+    "createdAt": "2026-03-17T02:17:59.866Z",
+    "lastUpdated": "2026-03-20T14:49:12.201Z"
+  },
+  "churches": [
+    {
+      "id": "church-1773828939841-j6mqbl",
+      "name": "COC",
+      "size": "medium",
+      "totalMembers": 1,
+      "monthlyDonations": 0,
+      "weeklyAttendance": 0,
+      "createdAt": "2026-03-18T10:15:39.840Z",
+      "lastUpdated": "2026-03-20T12:45:54.857Z",
+      "status": "active",
+      "adminName": "BEKS",
+      "adminEmail": "evansboamah8@gmail.com",
+      "email": "evansboamah8@gmail.com",
+      "primaryBranchId": "branch-church-1773828939841-j6mqbl-primary",
+      "billing": {
+        "provider": "paystack",
+        "planKey": "growth",
+        "planName": "Growth",
+        "amount": 10,
+        "currency": "USD",
+        "interval": "monthly",
+        "status": "trialing",
+        "billingEmail": "evansboamah8@gmail.com",
+        "startedAt": "2026-03-18T10:15:39.840Z",
+        "renewalDate": "2026-03-20",
+        "trialEndsAt": "2026-04-19"
+      }
+    },
+    {
+      "id": "church-1773833479517-s392pd",
+      "name": "ACGM",
+      "size": "large",
+      "totalMembers": 1,
+      "monthlyDonations": 0,
+      "weeklyAttendance": 0,
+      "createdAt": "2026-03-18T11:31:19.516Z",
+      "lastUpdated": "2026-03-20T12:44:20.758Z",
+      "status": "active",
+      "adminName": "evans",
+      "adminEmail": "legaltechrescue@gmail.com",
+      "email": "legaltechrescue@gmail.com",
+      "phone": "0544188950",
+      "address": "P.O.BOX 140 EFFIDUASE-KOFORIDUA.",
+      "website": "beks-build-du1y.vercel.app",
+      "primaryBranchId": "branch-church-1773833479517-s392pd-primary",
+      "billing": {
+        "provider": "paystack",
+        "planKey": "enterprise",
+        "planName": "Enterprise",
+        "amount": 10,
+        "currency": "USD",
+        "interval": "monthly",
+        "status": "trialing",
+        "billingEmail": "legaltechrescue@gmail.com",
+        "startedAt": "2026-03-18T11:31:19.516Z",
+        "renewalDate": "2026-04-19",
+        "trialEndsAt": "2026-04-19"
+      }
+    }
+  ],
+  "branches": [
+    {
+      "id": "branch-church-1773828939841-j6mqbl-primary",
+      "churchId": "church-1773828939841-j6mqbl",
+      "name": "Main Campus",
+      "email": "evansboamah8@gmail.com",
+      "isPrimary": true,
+      "status": "active",
+      "createdAt": "2026-03-18T10:15:39.840Z"
+    },
+    {
+      "id": "branch-church-1773833479517-s392pd-primary",
+      "churchId": "church-1773833479517-s392pd",
+      "name": "Main Campus",
+      "email": "legaltechrescue@gmail.com",
+      "isPrimary": true,
+      "status": "active",
+      "createdAt": "2026-03-18T11:31:19.516Z",
+      "createdByUserId": "user-1773833479518-8wanx7"
+    },
+    {
+      "id": "branch-1773833754426-7zbjm7",
+      "churchId": "church-1773833479517-s392pd",
+      "name": "N com",
+      "email": "evansboamah8@gmail.com",
+      "phone": "+233544188950",
+      "address": "EN-314-3710",
+      "isPrimary": false,
+      "status": "active",
+      "createdAt": "2026-03-18T11:35:54.426Z",
+      "createdByUserId": "user-1773833479518-8wanx7"
+    }
+  ],
+  "users": [
+    {
+      "id": "user-super-admin-001",
+      "name": "System Administrator",
+      "email": "superadmin@divinedesk.com",
+      "password": "admin123",
+      "role": "super_admin",
+      "churchId": null,
+      "branchId": null,
+      "status": "active",
+      "createdAt": "2024-09-24T02:17:59.866Z",
+      "lastLoginAt": "2026-03-20T12:52:41.150Z"
+    },
+    {
+      "id": "user-1773828939841-g9iv6m",
+      "name": "BEKS",
+      "email": "evansboamah8@gmail.com",
+      "password": "123456789",
+      "role": "admin",
+      "churchId": "church-1773828939841-j6mqbl",
+      "branchId": null,
+      "status": "active",
+      "createdAt": "2026-03-18T10:15:39.840Z",
+      "lastLoginAt": "2026-03-20T14:49:12.201Z"
+    },
+    {
+      "id": "user-1773833479518-8wanx7",
+      "name": "evans",
+      "email": "legaltechrescue@gmail.com",
+      "password": "121212",
+      "role": "admin",
+      "churchId": "church-1773833479517-s392pd",
+      "branchId": null,
+      "status": "active",
+      "createdAt": "2026-03-18T11:31:19.516Z",
+      "lastLoginAt": "2026-03-20T12:45:07.710Z"
+    },
+    {
+      "id": "user-1773833848452-wfhcxh",
+      "name": "kofi",
+      "email": "2323@gmail.com",
+      "password": "1234567890",
+      "role": "branch_admin",
+      "churchId": "church-1773833479517-s392pd",
+      "branchId": "branch-1773833754426-7zbjm7",
+      "status": "active",
+      "createdAt": "2026-03-18T11:37:28.452Z",
+      "lastLoginAt": "2026-03-20T12:45:17.439Z"
+    }
+  ],
+  "members": [
+    {
+      "id": "member-1773828939841-vchm69",
+      "churchId": "church-1773828939841-j6mqbl",
+      "branchId": "branch-church-1773828939841-j6mqbl-primary",
+      "name": "BEKS",
+      "email": "evansboamah8@gmail.com",
+      "phone": "",
+      "address": "",
+      "ministryGroup": "Leadership",
+      "joinDate": "2026-03-18",
+      "status": "active",
+      "notes": "Created during church onboarding."
+    },
+    {
+      "id": "member-1773833479518-6mliqe",
+      "churchId": "church-1773833479517-s392pd",
+      "branchId": "branch-church-1773833479517-s392pd-primary",
+      "name": "evans",
+      "email": "legaltechrescue@gmail.com",
+      "phone": "",
+      "address": "",
+      "ministryGroup": "Leadership",
+      "joinDate": "2026-03-18",
+      "status": "active",
+      "notes": "Created during church onboarding."
+    }
+  ],
+  "donations": [],
+  "events": [],
+  "attendance": [],
+  "subscriptionPayments": []
+}
