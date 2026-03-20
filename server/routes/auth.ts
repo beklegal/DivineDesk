@@ -24,6 +24,14 @@ function isSubscriptionPlanKey(value: unknown): value is SubscriptionPlanKey {
   return BILLING_PLANS.some((plan) => plan.key === value);
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function logAuthError(scope: string, error: unknown) {
+  console.error(`[auth] ${scope}`, error);
+}
+
 interface TokenPayload {
   userId: string;
   churchId: string | null;
@@ -235,8 +243,12 @@ export const handleLogin: RequestHandler = async (req, res) => {
     }
 
     res.json(buildAuthResponse(result.data));
-  } catch {
-    res.status(500).json({ success: false, error: "Login failed" });
+  } catch (error) {
+    logAuthError("login failed", error);
+    res.status(500).json({
+      success: false,
+      error: getErrorMessage(error, "Login failed"),
+    });
   }
 };
 
@@ -348,8 +360,12 @@ export const handleSignUp: RequestHandler = async (req, res) => {
         branch: null,
       }),
     );
-  } catch {
-    res.status(500).json({ success: false, error: "Sign up failed" });
+  } catch (error) {
+    logAuthError("signup failed", error);
+    res.status(500).json({
+      success: false,
+      error: getErrorMessage(error, "Sign up failed"),
+    });
   }
 };
 
@@ -375,8 +391,12 @@ export const handleGetMe: RequestHandler = async (req, res) => {
         branch: authContext.branch,
       },
     });
-  } catch {
-    res.status(500).json({ success: false, error: "Failed to get user" });
+  } catch (error) {
+    logAuthError("get current user failed", error);
+    res.status(500).json({
+      success: false,
+      error: getErrorMessage(error, "Failed to get user"),
+    });
   }
 };
 
