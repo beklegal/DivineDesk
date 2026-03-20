@@ -32,6 +32,29 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+async function readJsonResponse<T>(response: Response): Promise<T | null> {
+  const text = await response.text();
+
+  if (!text) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`Unexpected server response (${response.status})`);
+  }
+}
+
+function isAuthResponse(value: AuthResponse | { error?: string } | null): value is AuthResponse {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "token" in value &&
+      "user" in value,
+  );
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [church, setChurch] = useState<Church | null>(null);
@@ -81,10 +104,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         Authorization: `Bearer ${activeToken}`,
       },
     });
+    const data = await readJsonResponse<{
+      error?: string;
+      data?: {
+        user: User;
+        church: Church | null;
+        branch?: ChurchBranch | null;
+      };
+    }>(response);
 
     if (!response.ok) {
-      const data = await response.json().catch(() => null);
-
       if (response.status === 401) {
         clearSession();
         return;
@@ -93,12 +122,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(data?.error || "Failed to refresh session");
     }
 
-    const data = await response.json();
+    if (!data?.data?.user) {
+      throw new Error("Unexpected session response from server");
+    }
+
     persistSession({
       token: activeToken,
       user: data.data.user,
-      church: data.data.church,
-      branch: data.data.branch ?? null,
+      church: data?.data?.church ?? null,
+      branch: data?.data?.branch ?? null,
     });
   };
 
@@ -157,17 +189,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
+      const data = await readJsonResponse<AuthResponse & { error?: string }>(response);
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Login failed");
+        throw new Error(data?.error || "Login failed");
       }
 
-      const data = await response.json();
+      if (!isAuthResponse(data)) {
+        throw new Error("Unexpected login response from server");
+      }
+
       persistSession({
         token: data.token,
         user: data.user,
-        church: data.church,
+        church: data.church ?? null,
         branch: data.branch ?? null,
       });
 
@@ -206,17 +241,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           billingPlanKey,
         }),
       });
+      const data = await readJsonResponse<AuthResponse & { error?: string }>(response);
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Sign up failed");
+        throw new Error(data?.error || "Sign up failed");
       }
 
-      const data = await response.json();
+      if (!isAuthResponse(data)) {
+        throw new Error("Unexpected sign up response from server");
+      }
+
       persistSession({
         token: data.token,
         user: data.user,
-        church: data.church,
+        church: data.church ?? null,
         branch: data.branch ?? null,
       });
 

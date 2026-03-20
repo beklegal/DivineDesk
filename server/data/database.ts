@@ -273,8 +273,9 @@ function normalizeOptionalEnvironmentValue(value?: string | null) {
 function getExternalDatabaseUrl() {
   return (
     normalizeOptionalEnvironmentValue(process.env.DIVINEDESK_DATABASE_URL) ??
-    normalizeOptionalEnvironmentValue(process.env.DATABASE_URL) ??
+    normalizeOptionalEnvironmentValue(process.env.DATABASE_URL_UNPOOLED) ??
     normalizeOptionalEnvironmentValue(process.env.POSTGRES_URL_NON_POOLING) ??
+    normalizeOptionalEnvironmentValue(process.env.DATABASE_URL) ??
     normalizeOptionalEnvironmentValue(process.env.POSTGRES_URL)
   );
 }
@@ -282,7 +283,7 @@ function getExternalDatabaseUrl() {
 const EXTERNAL_DATABASE_URL = getExternalDatabaseUrl();
 const USE_EXTERNAL_DATABASE = Boolean(EXTERNAL_DATABASE_URL);
 
-interface ExternalDatabasePool {
+interface ExternalDatabaseQueryClient {
   query<R extends Record<string, unknown> = Record<string, unknown>>(
     text: string,
     values?: unknown[],
@@ -290,7 +291,16 @@ interface ExternalDatabasePool {
     rows: R[];
     rowCount?: number | null;
   }>;
+}
+
+interface ExternalDatabasePool {
+  query: ExternalDatabaseQueryClient["query"];
+  connect(): Promise<ExternalDatabasePoolClient>;
   end(): Promise<void>;
+}
+
+interface ExternalDatabasePoolClient extends ExternalDatabaseQueryClient {
+  release(): void;
 }
 
 function clone<T>(value: T): T {
@@ -596,8 +606,8 @@ async function withExternalDatabaseClient<T>(
   }
 }
 
-async function ensureExternalDatabaseSchema(pool: ExternalDatabasePool) {
-  await pool.query(`
+async function ensureExternalDatabaseSchema(client: ExternalDatabaseQueryClient) {
+  await client.query(`
     CREATE TABLE IF NOT EXISTS ${APP_STATE_TABLE} (
       id SMALLINT PRIMARY KEY,
       payload JSONB NOT NULL,
@@ -607,10 +617,10 @@ async function ensureExternalDatabaseSchema(pool: ExternalDatabasePool) {
   `);
 }
 
-async function ensureExternalDatabaseRow(pool: ExternalDatabasePool) {
-  await ensureExternalDatabaseSchema(pool);
+async function ensureExternalDatabaseRow(client: ExternalDatabaseQueryClient) {
+  await ensureExternalDatabaseSchema(client);
 
-  const existing = await pool.query(
+  const existing = await client.query(
     `SELECT 1 FROM ${APP_STATE_TABLE} WHERE id = $1`,
     [APP_STATE_ROW_ID],
   );
@@ -621,7 +631,7 @@ async function ensureExternalDatabaseRow(pool: ExternalDatabasePool) {
 
   const initialDatabase = await loadInitialDatabaseSnapshot();
 
-  await pool.query(
+  await client.query(
     `INSERT INTO ${APP_STATE_TABLE} (id, payload)
      VALUES ($1, $2::jsonb)
      ON CONFLICT (id) DO NOTHING`,
@@ -651,20 +661,22 @@ async function updateDatabaseInExternalStore<T>(
   updater: (database: DivineDeskDatabase) => Promise<T> | T,
 ) {
   return withExternalDatabaseClient(async (pool) => {
-    await ensureExternalDatabaseSchema(pool);
-    await pool.query("BEGIN");
+    const client = await pool.connect();
 
     try {
+      await ensureExternalDatabaseSchema(client);
+      await client.query("BEGIN");
+
       const initialDatabase = await loadInitialDatabaseSnapshot();
 
-      await pool.query(
+      await client.query(
         `INSERT INTO ${APP_STATE_TABLE} (id, payload)
          VALUES ($1, $2::jsonb)
          ON CONFLICT (id) DO NOTHING`,
         [APP_STATE_ROW_ID, JSON.stringify(initialDatabase)],
       );
 
-      const result = await pool.query<{ payload: unknown }>(
+      const result = await client.query<{ payload: unknown }>(
         `SELECT payload FROM ${APP_STATE_TABLE} WHERE id = $1 FOR UPDATE`,
         [APP_STATE_ROW_ID],
       );
@@ -678,18 +690,20 @@ async function updateDatabaseInExternalStore<T>(
       const updateResult = await updater(workingCopy);
       const normalized = normalizeDatabase(workingCopy);
 
-      await pool.query(
+      await client.query(
         `UPDATE ${APP_STATE_TABLE}
          SET payload = $2::jsonb, updated_at = NOW()
          WHERE id = $1`,
         [APP_STATE_ROW_ID, JSON.stringify(normalized)],
       );
 
-      await pool.query("COMMIT");
+      await client.query("COMMIT");
       return updateResult;
     } catch (error) {
-      await pool.query("ROLLBACK");
+      await client.query("ROLLBACK");
       throw error;
+    } finally {
+      client.release();
     }
   });
 }
