@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
-  "buildCommand": "pnpm build:client",
+  "buildCommand": "pnpm prisma:generate && pnpm prisma:migrate && pnpm build:client",
   "outputDirectory": "dist/spa",
   "functions": {
     "api/**/*.ts": {

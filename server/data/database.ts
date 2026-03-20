@@ -1,6 +1,7 @@
 import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
+import type { User as PrismaStoredUser } from "@prisma/client";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import { z } from "zod";
 import ws from "ws";
@@ -24,6 +25,8 @@ import {
   resolvePrimaryBranchId,
 } from "../lib/branches.js";
 import { ensureChurchBilling } from "../lib/billing.js";
+import { hashPassword, isPasswordHash } from "../../lib/auth.js";
+import { getPrismaClient } from "../../lib/prisma.js";
 
 type EntityStatus = "active" | "inactive" | "suspended";
 
@@ -282,6 +285,7 @@ function getExternalDatabaseUrl() {
 
 const EXTERNAL_DATABASE_URL = getExternalDatabaseUrl();
 const USE_EXTERNAL_DATABASE = Boolean(EXTERNAL_DATABASE_URL);
+const USE_PRISMA_USER_STORE = Boolean(EXTERNAL_DATABASE_URL);
 
 interface ExternalDatabaseQueryClient {
   query<R extends Record<string, unknown> = Record<string, unknown>>(
@@ -305,6 +309,171 @@ interface ExternalDatabasePoolClient extends ExternalDatabaseQueryClient {
 
 function clone<T>(value: T): T {
   return structuredClone(value);
+}
+
+function toStoredUserRecord(user: PrismaStoredUser): StoredUser {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    password: user.password,
+    role: user.role as UserRole,
+    churchId: user.churchId,
+    branchId: user.branchId,
+    status: user.status as EntityStatus,
+    createdAt: user.createdAt.toISOString(),
+    ...(user.lastLoginAt ? { lastLoginAt: user.lastLoginAt.toISOString() } : {}),
+  };
+}
+
+async function secureStoredUsers(users: StoredUser[]) {
+  let changed = false;
+
+  const nextUsers = await Promise.all(
+    users.map(async (user) => {
+      const email = user.email.trim().toLowerCase();
+      const password = isPasswordHash(user.password)
+        ? user.password
+        : await hashPassword(user.password);
+      const churchId = user.churchId ?? null;
+      const branchId = user.branchId ?? null;
+
+      if (
+        email !== user.email ||
+        password !== user.password ||
+        churchId !== (user.churchId ?? null) ||
+        branchId !== (user.branchId ?? null)
+      ) {
+        changed = true;
+      }
+
+      return {
+        ...user,
+        email,
+        password,
+        churchId,
+        branchId,
+      };
+    }),
+  );
+
+  return {
+    users: nextUsers,
+    changed,
+  };
+}
+
+async function applySecureUserStorage(database: DivineDeskDatabase) {
+  const { users, changed } = await secureStoredUsers(database.users);
+  return changed ? { ...database, users } : database;
+}
+
+async function ensurePrismaUsersSeeded(users: StoredUser[]) {
+  if (!USE_PRISMA_USER_STORE) {
+    return;
+  }
+
+  const prisma = getPrismaClient();
+  const existingUsers = await prisma.user.findMany({
+    select: { id: true },
+  });
+  const existingIds = new Set(existingUsers.map((user) => user.id));
+  const { users: secureUsers } = await secureStoredUsers(users);
+
+  for (const user of secureUsers) {
+    if (existingIds.has(user.id)) {
+      continue;
+    }
+
+    await prisma.user.create({
+      data: {
+        id: user.id,
+        email: user.email,
+        password: user.password,
+        name: user.name,
+        role: user.role,
+        churchId: user.churchId ?? null,
+        branchId: user.branchId ?? null,
+        status: user.status,
+        createdAt: new Date(user.createdAt),
+        lastLoginAt: user.lastLoginAt ? new Date(user.lastLoginAt) : null,
+      },
+    });
+  }
+}
+
+async function hydrateUsersFromPrisma(database: DivineDeskDatabase) {
+  if (!USE_PRISMA_USER_STORE) {
+    return database;
+  }
+
+  await ensurePrismaUsersSeeded(database.users);
+
+  const prisma = getPrismaClient();
+  const prismaUsers = await prisma.user.findMany({
+    orderBy: { createdAt: "asc" },
+  });
+
+  return {
+    ...database,
+    users: prismaUsers.map(toStoredUserRecord),
+  };
+}
+
+async function persistUsersToPrisma(database: DivineDeskDatabase) {
+  if (!USE_PRISMA_USER_STORE) {
+    return database;
+  }
+
+  const prisma = getPrismaClient();
+  const { users: secureUsers } = await secureStoredUsers(database.users);
+  const desiredIds = new Set(secureUsers.map((user) => user.id));
+
+  for (const user of secureUsers) {
+    await prisma.user.upsert({
+      where: { id: user.id },
+      update: {
+        email: user.email,
+        password: user.password,
+        name: user.name,
+        role: user.role,
+        churchId: user.churchId ?? null,
+        branchId: user.branchId ?? null,
+        status: user.status,
+        createdAt: new Date(user.createdAt),
+        lastLoginAt: user.lastLoginAt ? new Date(user.lastLoginAt) : null,
+      },
+      create: {
+        id: user.id,
+        email: user.email,
+        password: user.password,
+        name: user.name,
+        role: user.role,
+        churchId: user.churchId ?? null,
+        branchId: user.branchId ?? null,
+        status: user.status,
+        createdAt: new Date(user.createdAt),
+        lastLoginAt: user.lastLoginAt ? new Date(user.lastLoginAt) : null,
+      },
+    });
+  }
+
+  if (desiredIds.size > 0) {
+    await prisma.user.deleteMany({
+      where: {
+        id: {
+          notIn: Array.from(desiredIds),
+        },
+      },
+    });
+  } else {
+    await prisma.user.deleteMany();
+  }
+
+  return {
+    ...database,
+    users: secureUsers,
+  };
 }
 
 function parseDate(value: string): Date {
@@ -574,9 +743,9 @@ function parseDatabasePayload(payload: unknown) {
 async function loadInitialDatabaseSnapshot() {
   try {
     const bundledContents = await fs.readFile(DEFAULT_DATA_FILE, "utf8");
-    return parseDatabasePayload(bundledContents);
+    return applySecureUserStorage(parseDatabasePayload(bundledContents));
   } catch {
-    return normalizeDatabase(createSeedDatabase());
+    return applySecureUserStorage(normalizeDatabase(createSeedDatabase()));
   }
 }
 
@@ -653,7 +822,11 @@ async function readDatabaseFromExternalStore() {
       throw new Error("Application state row is missing");
     }
 
-    return parseDatabasePayload(row.payload);
+    const secureDatabase = await applySecureUserStorage(
+      parseDatabasePayload(row.payload),
+    );
+
+    return hydrateUsersFromPrisma(secureDatabase);
   });
 }
 
@@ -689,12 +862,14 @@ async function updateDatabaseInExternalStore<T>(
       const workingCopy = parseDatabasePayload(row.payload);
       const updateResult = await updater(workingCopy);
       const normalized = normalizeDatabase(workingCopy);
+      const secureDatabase = await applySecureUserStorage(normalized);
+      const prismaBackedDatabase = await persistUsersToPrisma(secureDatabase);
 
       await client.query(
         `UPDATE ${APP_STATE_TABLE}
          SET payload = $2::jsonb, updated_at = NOW()
          WHERE id = $1`,
-        [APP_STATE_ROW_ID, JSON.stringify(normalized)],
+        [APP_STATE_ROW_ID, JSON.stringify(prismaBackedDatabase)],
       );
 
       await client.query("COMMIT");
@@ -730,19 +905,21 @@ async function loadDatabaseInternal() {
   const fileContents = await fs.readFile(DATA_FILE, "utf8");
   const parsed = databaseSchema.parse(JSON.parse(fileContents)) as DivineDeskDatabase;
   const normalized = normalizeDatabase(parsed);
-  const normalizedContents = JSON.stringify(normalized, null, 2);
+  const secureDatabase = await applySecureUserStorage(normalized);
+  const normalizedContents = JSON.stringify(secureDatabase, null, 2);
 
   if (fileContents.trim() !== normalizedContents) {
     await fs.writeFile(DATA_FILE, normalizedContents, "utf8");
   }
 
-  databaseCache = clone(normalized);
-  return clone(normalized);
+  databaseCache = clone(secureDatabase);
+  return clone(secureDatabase);
 }
 
 async function persistDatabase(database: DivineDeskDatabase) {
-  databaseCache = clone(database);
-  await fs.writeFile(DATA_FILE, JSON.stringify(database, null, 2), "utf8");
+  const secureDatabase = await applySecureUserStorage(database);
+  databaseCache = clone(secureDatabase);
+  await fs.writeFile(DATA_FILE, JSON.stringify(secureDatabase, null, 2), "utf8");
 }
 
 export async function readDatabase() {

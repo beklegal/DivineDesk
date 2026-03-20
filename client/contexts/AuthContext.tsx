@@ -74,7 +74,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setChurch(nextSession.church);
     setBranch(nextSession.branch ?? null);
 
-    localStorage.setItem("divinedesk_token", nextSession.token);
     localStorage.setItem("divinedesk_user", JSON.stringify(nextSession.user));
     localStorage.setItem("divinedesk_church", JSON.stringify(nextSession.church));
     localStorage.setItem("divinedesk_branch", JSON.stringify(nextSession.branch ?? null));
@@ -85,27 +84,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setChurch(null);
     setBranch(null);
-    localStorage.removeItem("divinedesk_token");
     localStorage.removeItem("divinedesk_user");
     localStorage.removeItem("divinedesk_church");
     localStorage.removeItem("divinedesk_branch");
   };
 
   const refreshSession = async () => {
-    const activeToken = token ?? localStorage.getItem("divinedesk_token");
-
-    if (!activeToken) {
-      clearSession();
-      return;
-    }
-
     const response = await fetch("/api/auth/me", {
-      headers: {
-        Authorization: `Bearer ${activeToken}`,
-      },
+      credentials: "include",
     });
     const data = await readJsonResponse<{
       error?: string;
+      token?: string;
       data?: {
         user: User;
         church: Church | null;
@@ -127,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     persistSession({
-      token: activeToken,
+      token: data.token ?? token ?? "",
       user: data.data.user,
       church: data?.data?.church ?? null,
       branch: data?.data?.branch ?? null,
@@ -138,23 +128,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let isMounted = true;
 
     const bootstrapSession = async () => {
-      const storedToken = localStorage.getItem("divinedesk_token");
+      localStorage.removeItem("divinedesk_token");
       const storedUser = localStorage.getItem("divinedesk_user");
       const storedChurch = localStorage.getItem("divinedesk_church");
       const storedBranch = localStorage.getItem("divinedesk_branch");
 
-      if (!storedToken || !storedUser) {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-        return;
-      }
-
       try {
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
-        setChurch(storedChurch ? JSON.parse(storedChurch) : null);
-        setBranch(storedBranch ? JSON.parse(storedBranch) : null);
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+          setChurch(storedChurch ? JSON.parse(storedChurch) : null);
+          setBranch(storedBranch ? JSON.parse(storedBranch) : null);
+        }
 
         await refreshSession();
       } catch (sessionError) {
@@ -186,6 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
@@ -231,6 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await fetch("/api/auth/signup", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           churchName,
@@ -270,6 +256,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    void fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "include",
+    }).catch(() => undefined);
     clearSession();
   };
 
@@ -296,7 +286,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshSession,
     updateChurch,
     updateBranch,
-    isAuthenticated: !!user && !!token,
+    isAuthenticated: !!user,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

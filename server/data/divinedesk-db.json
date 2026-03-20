@@ -2,7 +2,7 @@
   "meta": {
     "version": 1,
     "createdAt": "2026-03-17T02:17:59.866Z",
-    "lastUpdated": "2026-03-20T14:49:12.201Z"
+    "lastUpdated": "2026-03-20T22:10:57.531Z"
   },
   "churches": [
     {
@@ -103,7 +103,7 @@
       "id": "user-super-admin-001",
       "name": "System Administrator",
       "email": "superadmin@divinedesk.com",
-      "password": "admin123",
+      "password": "$2b$10$1urw.SR91fDCKOSfbGeEXumYCAyZtzCWIDOh6zgkg2xZZw2M6GTia",
       "role": "super_admin",
       "churchId": null,
       "branchId": null,
@@ -115,7 +115,7 @@
       "id": "user-1773828939841-g9iv6m",
       "name": "BEKS",
       "email": "evansboamah8@gmail.com",
-      "password": "123456789",
+      "password": "$2b$10$MWl9/ZxrMWn2AcDkaW4GhOznEqjb/a8prKY6.sA0taN3wAAGth44G",
       "role": "admin",
       "churchId": "church-1773828939841-j6mqbl",
       "branchId": null,
@@ -127,7 +127,7 @@
       "id": "user-1773833479518-8wanx7",
       "name": "evans",
       "email": "legaltechrescue@gmail.com",
-      "password": "121212",
+      "password": "$2b$10$O3ZA0.Xor2Wtf/jwftVYweYH.rViZodWGhBvYfHo4hgPshOCFy6JK",
       "role": "admin",
       "churchId": "church-1773833479517-s392pd",
       "branchId": null,
@@ -139,7 +139,7 @@
       "id": "user-1773833848452-wfhcxh",
       "name": "kofi",
       "email": "2323@gmail.com",
-      "password": "1234567890",
+      "password": "$2b$10$JNOsLHUsAUky6bigBMrAgeG5JHlBjJiMyIFh9shOVOXP6uo3Z56Rm",
       "role": "branch_admin",
       "churchId": "church-1773833479517-s392pd",
       "branchId": "branch-1773833754426-7zbjm7",

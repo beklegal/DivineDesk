@@ -35,6 +35,8 @@
   "include": [
     "api/**/*",
     "client/**/*",
+    "lib/**/*",
+    "prisma/**/*",
     "server/**/*",
     "shared/**/*",
     "vite.config.ts",

@@ -1,4 +1,5 @@
 import { RequestHandler } from "express";
+import { z } from "zod";
 import type {
   AuthResponse,
   ChurchBranch,
@@ -19,6 +20,31 @@ import {
 } from "../data/database.js";
 import { createPrimaryBranch, findChurchBranch } from "../lib/branches.js";
 import { createChurchBilling, ensureChurchBilling, isChurchBillingBlocked } from "../lib/billing.js";
+import {
+  clearAuthCookie,
+  createSessionToken,
+  getSessionTokenFromHeaders,
+  setAuthCookie,
+  verifyPassword,
+  verifySessionToken,
+} from "../../lib/auth.js";
+
+const loginRequestSchema = z.object({
+  email: z.string().trim().email("A valid email address is required"),
+  password: z.string().trim().min(1, "Password is required"),
+});
+
+const signUpRequestSchema = z.object({
+  churchName: z.string().trim().min(1, "Church name is required"),
+  adminName: z.string().trim().min(1, "Admin name is required"),
+  email: z.string().trim().email("A valid email address is required"),
+  password: z
+    .string()
+    .trim()
+    .min(6, "Password must be at least 6 characters"),
+  churchSize: z.enum(["small", "medium", "large"]),
+  billingPlanKey: z.enum(["starter", "growth", "enterprise", "custom"]),
+});
 
 function isSubscriptionPlanKey(value: unknown): value is SubscriptionPlanKey {
   return BILLING_PLANS.some((plan) => plan.key === value);
@@ -30,65 +56,6 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 function logAuthError(scope: string, error: unknown) {
   console.error(`[auth] ${scope}`, error);
-}
-
-interface TokenPayload {
-  userId: string;
-  churchId: string | null;
-  branchId: string | null;
-}
-
-function generateToken(
-  userId: string,
-  churchId?: string | null,
-  branchId?: string | null,
-) {
-  const payload = Buffer.from(
-    JSON.stringify({
-      userId,
-      churchId: churchId ?? null,
-      branchId: branchId ?? null,
-    }),
-    "utf8",
-  ).toString("base64url");
-
-  return `token.${payload}`;
-}
-
-export function verifyToken(token: string): TokenPayload | null {
-  try {
-    if (token.startsWith("token.")) {
-      const [, payload] = token.split(".");
-      const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-
-      if (typeof decoded.userId !== "string") {
-        return null;
-      }
-
-      return {
-        userId: decoded.userId,
-        churchId: typeof decoded.churchId === "string" ? decoded.churchId : null,
-        branchId: typeof decoded.branchId === "string" ? decoded.branchId : null,
-      };
-    }
-
-    if (token.startsWith("token_")) {
-      const [, userId, churchId, branchId] = token.split("_");
-      if (!userId) {
-        return null;
-      }
-
-      return {
-        userId,
-        churchId: churchId || null,
-        branchId: branchId || null,
-      };
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
 }
 
 function hasActiveChurchAccess(user: StoredUser, church: StoredChurch | null) {
@@ -122,12 +89,19 @@ function buildAuthResponse(options: {
   church: StoredChurch | null;
   branch?: ChurchBranch | null;
 }): AuthResponse {
+  const token = createSessionToken({
+    userId: options.user.id,
+    churchId: options.user.churchId ?? null,
+    branchId: options.user.branchId ?? null,
+    role: options.user.role,
+  });
+
   return {
     success: true,
     user: toAuthenticatedUser(options.user, options.branch),
     church: toPublicChurch(options.church),
     branch: options.branch ?? null,
-    token: generateToken(options.user.id, options.user.churchId, options.user.branchId),
+    token,
   };
 }
 
@@ -136,7 +110,7 @@ export async function getAuthContextFromToken(token?: string | null) {
     return null;
   }
 
-  const verified = verifyToken(token);
+  const verified = verifySessionToken(token);
   if (!verified) {
     return null;
   }
@@ -172,7 +146,7 @@ export async function getAuthContextFromToken(token?: string | null) {
 
 export const authenticate: RequestHandler = async (req: any, _res, next) => {
   try {
-    const token = req.headers.authorization?.replace("Bearer ", "");
+    const token = getSessionTokenFromHeaders(req.headers);
     const authContext = await getAuthContextFromToken(token);
     const hasChurchWorkspaceAccess = authContext
       ? hasActiveChurchAccess(authContext.user, authContext.church)
@@ -204,23 +178,28 @@ export const authenticate: RequestHandler = async (req: any, _res, next) => {
 
 export const handleLogin: RequestHandler = async (req, res) => {
   try {
-    const { email, password } = req.body as LoginRequest;
+    const parsed = loginRequestSchema.safeParse(req.body as LoginRequest);
 
-    if (!email || !password) {
+    if (!parsed.success) {
       res
         .status(400)
-        .json({ success: false, error: "Email and password required" });
+        .json({ success: false, error: parsed.error.issues[0]?.message ?? "Email and password are required" });
       return;
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
+    const { email, password } = parsed.data;
+    const normalizedEmail = email.toLowerCase();
 
-    const result = await updateDatabase((database) => {
+    const result = await updateDatabase(async (database) => {
       const user = database.users.find(
         (candidate) => candidate.email.toLowerCase() === normalizedEmail,
       );
 
-      if (!user || user.password !== password || user.status !== "active") {
+      const passwordMatches = user
+        ? await verifyPassword(password, user.password)
+        : false;
+
+      if (!user || !passwordMatches || user.status !== "active") {
         return { error: "Invalid email or password" as const, statusCode: 401 };
       }
 
@@ -242,7 +221,9 @@ export const handleLogin: RequestHandler = async (req, res) => {
       return;
     }
 
-    res.json(buildAuthResponse(result.data));
+    const authResponse = buildAuthResponse(result.data);
+    setAuthCookie(res, authResponse.token);
+    res.json(authResponse);
   } catch (error) {
     logAuthError("login failed", error);
     res.status(500).json({
@@ -254,20 +235,24 @@ export const handleLogin: RequestHandler = async (req, res) => {
 
 export const handleSignUp: RequestHandler = async (req, res) => {
   try {
-    const { churchName, adminName, email, password, churchSize, billingPlanKey } =
-      req.body as SignUpRequest;
+    const parsed = signUpRequestSchema.safeParse(req.body as SignUpRequest);
 
-    if (!churchName || !adminName || !email || !password || !churchSize || !billingPlanKey) {
-      res.status(400).json({ success: false, error: "All fields and a billing plan are required" });
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "All required fields must be completed",
+      });
       return;
     }
+
+    const { churchName, adminName, email, password, churchSize, billingPlanKey } = parsed.data;
 
     if (!isSubscriptionPlanKey(billingPlanKey)) {
       res.status(400).json({ success: false, error: "Invalid billing plan selected" });
       return;
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = email.toLowerCase();
     const now = new Date();
     const createdAt = now.toISOString();
     const joinDate = createdAt.split("T")[0];
@@ -278,7 +263,7 @@ export const handleSignUp: RequestHandler = async (req, res) => {
       );
 
       if (alreadyExists) {
-        return { error: "Email already registered" as const };
+        return { error: "User already exists" as const };
       }
 
       const churchId = createId("church");
@@ -353,13 +338,14 @@ export const handleSignUp: RequestHandler = async (req, res) => {
       return;
     }
 
-    res.status(201).json(
-      buildAuthResponse({
-        user: result.user,
-        church: result.church,
-        branch: null,
-      }),
-    );
+    const authResponse = buildAuthResponse({
+      user: result.user,
+      church: result.church,
+      branch: null,
+    });
+
+    setAuthCookie(res, authResponse.token);
+    res.status(201).json(authResponse);
   } catch (error) {
     logAuthError("signup failed", error);
     res.status(500).json({
@@ -370,12 +356,13 @@ export const handleSignUp: RequestHandler = async (req, res) => {
 };
 
 export const handleLogout: RequestHandler = (_req, res) => {
+  clearAuthCookie(res);
   res.json({ success: true, message: "Logged out successfully" });
 };
 
 export const handleGetMe: RequestHandler = async (req, res) => {
   try {
-    const token = req.headers.authorization?.replace("Bearer ", "");
+    const token = getSessionTokenFromHeaders(req.headers);
     const authContext = await getAuthContextFromToken(token);
 
     if (!authContext) {
@@ -385,6 +372,7 @@ export const handleGetMe: RequestHandler = async (req, res) => {
 
     res.json({
       success: true,
+      token: buildAuthResponse(authContext).token,
       data: {
         user: toAuthenticatedUser(authContext.user, authContext.branch),
         church: toPublicChurch(authContext.church),
