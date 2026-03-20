@@ -1,7 +1,7 @@
 import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
-import { Client, neonConfig } from "@neondatabase/serverless";
+import { Pool, neonConfig } from "@neondatabase/serverless";
 import { z } from "zod";
 import ws from "ws";
 import type {
@@ -559,30 +559,30 @@ async function loadInitialDatabaseSnapshot() {
   }
 }
 
-async function createExternalDatabaseClient() {
+async function createExternalDatabasePool() {
   if (!EXTERNAL_DATABASE_URL) {
     throw new Error("External database URL is not configured");
   }
 
-  const client = new Client(EXTERNAL_DATABASE_URL);
-  await client.connect();
-  return client;
+  return new Pool({
+    connectionString: EXTERNAL_DATABASE_URL,
+  });
 }
 
 async function withExternalDatabaseClient<T>(
-  work: (client: Client) => Promise<T>,
+  work: (pool: Pool) => Promise<T>,
 ) {
-  const client = await createExternalDatabaseClient();
+  const pool = await createExternalDatabasePool();
 
   try {
-    return await work(client);
+    return await work(pool);
   } finally {
-    await client.end();
+    await pool.end();
   }
 }
 
-async function ensureExternalDatabaseSchema(client: Client) {
-  await client.query(`
+async function ensureExternalDatabaseSchema(pool: Pool) {
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS ${APP_STATE_TABLE} (
       id SMALLINT PRIMARY KEY,
       payload JSONB NOT NULL,
@@ -592,10 +592,10 @@ async function ensureExternalDatabaseSchema(client: Client) {
   `);
 }
 
-async function ensureExternalDatabaseRow(client: Client) {
-  await ensureExternalDatabaseSchema(client);
+async function ensureExternalDatabaseRow(pool: Pool) {
+  await ensureExternalDatabaseSchema(pool);
 
-  const existing = await client.query(
+  const existing = await pool.query(
     `SELECT 1 FROM ${APP_STATE_TABLE} WHERE id = $1`,
     [APP_STATE_ROW_ID],
   );
@@ -606,7 +606,7 @@ async function ensureExternalDatabaseRow(client: Client) {
 
   const initialDatabase = await loadInitialDatabaseSnapshot();
 
-  await client.query(
+  await pool.query(
     `INSERT INTO ${APP_STATE_TABLE} (id, payload)
      VALUES ($1, $2::jsonb)
      ON CONFLICT (id) DO NOTHING`,
@@ -615,10 +615,10 @@ async function ensureExternalDatabaseRow(client: Client) {
 }
 
 async function readDatabaseFromExternalStore() {
-  return withExternalDatabaseClient(async (client) => {
-    await ensureExternalDatabaseRow(client);
+  return withExternalDatabaseClient(async (pool) => {
+    await ensureExternalDatabaseRow(pool);
 
-    const result = await client.query<{ payload: unknown }>(
+    const result = await pool.query<{ payload: unknown }>(
       `SELECT payload FROM ${APP_STATE_TABLE} WHERE id = $1`,
       [APP_STATE_ROW_ID],
     );
@@ -635,21 +635,21 @@ async function readDatabaseFromExternalStore() {
 async function updateDatabaseInExternalStore<T>(
   updater: (database: DivineDeskDatabase) => Promise<T> | T,
 ) {
-  return withExternalDatabaseClient(async (client) => {
-    await ensureExternalDatabaseSchema(client);
-    await client.query("BEGIN");
+  return withExternalDatabaseClient(async (pool) => {
+    await ensureExternalDatabaseSchema(pool);
+    await pool.query("BEGIN");
 
     try {
       const initialDatabase = await loadInitialDatabaseSnapshot();
 
-      await client.query(
+      await pool.query(
         `INSERT INTO ${APP_STATE_TABLE} (id, payload)
          VALUES ($1, $2::jsonb)
          ON CONFLICT (id) DO NOTHING`,
         [APP_STATE_ROW_ID, JSON.stringify(initialDatabase)],
       );
 
-      const result = await client.query<{ payload: unknown }>(
+      const result = await pool.query<{ payload: unknown }>(
         `SELECT payload FROM ${APP_STATE_TABLE} WHERE id = $1 FOR UPDATE`,
         [APP_STATE_ROW_ID],
       );
@@ -663,17 +663,17 @@ async function updateDatabaseInExternalStore<T>(
       const updateResult = await updater(workingCopy);
       const normalized = normalizeDatabase(workingCopy);
 
-      await client.query(
+      await pool.query(
         `UPDATE ${APP_STATE_TABLE}
          SET payload = $2::jsonb, updated_at = NOW()
          WHERE id = $1`,
         [APP_STATE_ROW_ID, JSON.stringify(normalized)],
       );
 
-      await client.query("COMMIT");
+      await pool.query("COMMIT");
       return updateResult;
     } catch (error) {
-      await client.query("ROLLBACK");
+      await pool.query("ROLLBACK");
       throw error;
     }
   });
