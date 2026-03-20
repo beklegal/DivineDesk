@@ -15,15 +15,15 @@ import type {
   Member,
   User,
   UserRole,
-} from "../../shared/api";
-import { createSeedDatabase } from "./seed";
+} from "../../shared/api.js";
+import { createSeedDatabase } from "./seed.js";
 import {
   createPrimaryBranch,
   findChurchBranch,
   getChurchBranches,
   resolvePrimaryBranchId,
-} from "../lib/branches";
-import { ensureChurchBilling } from "../lib/billing";
+} from "../lib/branches.js";
+import { ensureChurchBilling } from "../lib/billing.js";
 
 type EntityStatus = "active" | "inactive" | "suspended";
 

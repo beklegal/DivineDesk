@@ -10,24 +10,24 @@ import type {
   CreateAdminUserRequest,
   UpdateAdminUserRequest,
   UpdateChurchRequest,
-} from "../../shared/api";
+} from "../../shared/api.js";
 import {
   SUBSCRIPTION_PLAN_KEYS,
   SUBSCRIPTION_STATUSES,
-} from "../../shared/api";
+} from "../../shared/api.js";
 import {
   createId,
   readDatabase,
   StoredChurch,
   StoredUser,
   updateDatabase,
-} from "../data/database";
+} from "../data/database.js";
 import {
   createChurchBilling,
   ensureChurchBilling,
   getBillingSnapshot,
   mergeChurchBilling,
-} from "../lib/billing";
+} from "../lib/billing.js";
 
 const DAYS_IN_MS = 24 * 60 * 60 * 1000;
 const CHURCH_SIZES = ["small", "medium", "large"] as const;

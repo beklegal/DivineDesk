@@ -5,15 +5,15 @@ import type {
   CreateBranchAdminRequest,
   CreateChurchBranchRequest,
   UpdateChurchProfileRequest,
-} from "../../shared/api";
-import { canManageChurchWorkspace } from "../../shared/permissions";
+} from "../../shared/api.js";
+import { canManageChurchWorkspace } from "../../shared/permissions.js";
 import {
   createId,
   readDatabase,
   StoredUser,
   updateDatabase,
-} from "../data/database";
-import { findChurchBranch, getChurchBranches } from "../lib/branches";
+} from "../data/database.js";
+import { findChurchBranch, getChurchBranches } from "../lib/branches.js";
 
 function requireChurchUser(req: any, res: any) {
   if (!req.churchId) {

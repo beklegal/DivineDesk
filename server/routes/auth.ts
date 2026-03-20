@@ -6,8 +6,8 @@ import type {
   SignUpRequest,
   SubscriptionPlanKey,
   User,
-} from "../../shared/api";
-import { BILLING_PLANS } from "../../shared/api";
+} from "../../shared/api.js";
+import { BILLING_PLANS } from "../../shared/api.js";
 import {
   createId,
   readDatabase,
@@ -16,9 +16,9 @@ import {
   toPublicChurch,
   toPublicUser,
   updateDatabase,
-} from "../data/database";
-import { createPrimaryBranch, findChurchBranch } from "../lib/branches";
-import { createChurchBilling, ensureChurchBilling, isChurchBillingBlocked } from "../lib/billing";
+} from "../data/database.js";
+import { createPrimaryBranch, findChurchBranch } from "../lib/branches.js";
+import { createChurchBilling, ensureChurchBilling, isChurchBillingBlocked } from "../lib/billing.js";
 
 function isSubscriptionPlanKey(value: unknown): value is SubscriptionPlanKey {
   return BILLING_PLANS.some((plan) => plan.key === value);

@@ -1,4 +1,4 @@
-import type { Church, ChurchBranch } from "../../shared/api";
+import type { Church, ChurchBranch } from "../../shared/api.js";
 
 export function buildPrimaryBranchId(churchId: string) {
   return `branch-${churchId}-primary`;

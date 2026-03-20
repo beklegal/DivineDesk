@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ensureChurchBilling, isChurchBillingBlocked } from "./billing";
+import { ensureChurchBilling, isChurchBillingBlocked } from "./billing.js";
 
 describe("billing lifecycle", () => {
   afterEach(() => {

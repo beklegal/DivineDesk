@@ -9,12 +9,12 @@ import type {
   SubscriptionPlanKey,
   SubscriptionStatus,
   UpdateChurchBillingRequest,
-} from "../../shared/api";
+} from "../../shared/api.js";
 import {
   BILLING_PLANS,
   DEFAULT_BILLING_TRIAL_DAYS,
   isChurchWorkspaceLocked,
-} from "../../shared/api";
+} from "../../shared/api.js";
 
 const PAYSTACK_API_BASE_URL = "https://api.paystack.co";
 const DEFAULT_APP_URL = "http://localhost:8080";

@@ -1,4 +1,4 @@
-import type { UserRole } from "./api";
+import type { UserRole } from "./api.js";
 
 interface WorkspaceScopedUser {
   role?: UserRole | string | null;

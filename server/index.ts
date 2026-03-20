@@ -1,14 +1,14 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import { handleDemo } from "./routes/demo";
+import { handleDemo } from "./routes/demo.js";
 import {
   handleLogin,
   handleSignUp,
   handleLogout,
   handleGetMe,
   authenticate,
-} from "./routes/auth";
+} from "./routes/auth.js";
 import {
   handleGetMembers,
   handleCreateMember,
@@ -18,7 +18,7 @@ import {
   handleCreateEvent,
   handleMarkAttendance,
   handleGetDashboardData,
-} from "./routes/church-data";
+} from "./routes/church-data.js";
 import {
   handleGetAdminDashboard,
   handleGetAllChurches,
@@ -30,7 +30,7 @@ import {
   handleCreateAdminUser,
   handleDeleteAdminUser,
   handleUpdateAdminUser,
-} from "./routes/admin";
+} from "./routes/admin.js";
 import {
   handleCreateAdminPaystackCheckout,
   handleCreateChurchPaystackCheckout,
@@ -40,13 +40,13 @@ import {
   handleRecordChurchSubscriptionPayment,
   handleVerifyAdminPaystackPayment,
   handleVerifyChurchPaystackPayment,
-} from "./routes/billing";
+} from "./routes/billing.js";
 import {
   handleCreateBranchAdmin,
   handleCreateChurchBranch,
   handleGetChurchWorkspace,
   handleUpdateChurchProfile,
-} from "./routes/workspace";
+} from "./routes/workspace.js";
 
 export function createServer() {
   const app = express();

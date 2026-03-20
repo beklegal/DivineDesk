@@ -11,9 +11,9 @@ import type {
   Donation,
   MarkAttendanceRequest,
   Member,
-} from "../../shared/api";
-import { createId, readDatabase, updateDatabase } from "../data/database";
-import { findChurchBranch, resolvePrimaryBranchId } from "../lib/branches";
+} from "../../shared/api.js";
+import { createId, readDatabase, updateDatabase } from "../data/database.js";
+import { findChurchBranch, resolvePrimaryBranchId } from "../lib/branches.js";
 
 const monthFormatter = new Intl.DateTimeFormat("en-US", { month: "short" });
 

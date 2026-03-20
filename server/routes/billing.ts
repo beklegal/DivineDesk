@@ -6,10 +6,10 @@ import type {
   CreatePaystackCheckoutRequest,
   SubscriptionPaymentMethod,
   UpdateChurchBillingRequest,
-} from "../../shared/api";
+} from "../../shared/api.js";
 import {
   SUBSCRIPTION_PAYMENT_METHODS,
-} from "../../shared/api";
+} from "../../shared/api.js";
 import {
   createPaystackCheckoutSession,
   ensureChurchBilling,
@@ -20,8 +20,8 @@ import {
   mergeChurchBilling,
   verifyPaystackSignature,
   verifyPaystackTransaction,
-} from "../lib/billing";
-import { createId, type DivineDeskDatabase, readDatabase, updateDatabase } from "../data/database";
+} from "../lib/billing.js";
+import { createId, type DivineDeskDatabase, readDatabase, updateDatabase } from "../data/database.js";
 
 const BILLING_CYCLE_DAYS = 30;
 
