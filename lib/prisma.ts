@@ -1,7 +1,37 @@
-import { PrismaClient } from "@prisma/client";
+import * as PrismaClientModule from "@prisma/client";
+
+export interface PrismaUserRecord {
+  id: string;
+  email: string;
+  password: string;
+  name: string;
+  role: string;
+  churchId: string | null;
+  branchId: string | null;
+  status: string;
+  createdAt: Date;
+  lastLoginAt: Date | null;
+}
+
+interface PrismaUserDelegate {
+  findMany(args?: unknown): Promise<PrismaUserRecord[]>;
+  create(args: unknown): Promise<PrismaUserRecord>;
+  upsert(args: unknown): Promise<PrismaUserRecord>;
+  deleteMany(args?: unknown): Promise<unknown>;
+}
+
+export interface PrismaClientLike {
+  user: PrismaUserDelegate;
+}
+
+const PrismaClientConstructor = (
+  PrismaClientModule as unknown as {
+    PrismaClient?: new (options?: unknown) => PrismaClientLike;
+  }
+).PrismaClient;
 
 const globalForPrisma = globalThis as typeof globalThis & {
-  __divinedeskPrisma?: PrismaClient;
+  __divinedeskPrisma?: PrismaClientLike;
 };
 
 export function getPrismaDatabaseUrl() {
@@ -20,6 +50,12 @@ export function getPrismaClient() {
     return globalForPrisma.__divinedeskPrisma;
   }
 
+  if (!PrismaClientConstructor) {
+    throw new Error(
+      "PrismaClient is unavailable. Ensure `pnpm prisma:generate` runs before starting the server.",
+    );
+  }
+
   const databaseUrl = getPrismaDatabaseUrl();
   if (!databaseUrl) {
     throw new Error(
@@ -27,7 +63,7 @@ export function getPrismaClient() {
     );
   }
 
-  const prisma = new PrismaClient({
+  const prisma = new PrismaClientConstructor({
     datasources: {
       db: {
         url: databaseUrl,

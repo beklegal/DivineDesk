@@ -1,7 +1,6 @@
 import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
-import type { User as PrismaStoredUser } from "@prisma/client";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import { z } from "zod";
 import ws from "ws";
@@ -27,6 +26,7 @@ import {
 import { ensureChurchBilling } from "../lib/billing.js";
 import { hashPassword, isPasswordHash } from "../../lib/auth.js";
 import { getPrismaClient } from "../../lib/prisma.js";
+import type { PrismaUserRecord } from "../../lib/prisma.js";
 
 type EntityStatus = "active" | "inactive" | "suspended";
 
@@ -311,7 +311,7 @@ function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
-function toStoredUserRecord(user: PrismaStoredUser): StoredUser {
+function toStoredUserRecord(user: PrismaUserRecord): StoredUser {
   return {
     id: user.id,
     name: user.name,
