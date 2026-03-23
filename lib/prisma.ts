@@ -37,6 +37,7 @@ const globalForPrisma = globalThis as typeof globalThis & {
 export function getPrismaDatabaseUrl() {
   return (
     process.env.DIRECT_URL?.trim() ||
+    process.env.POSTGRES_PRISMA_URL?.trim() ||
     process.env.DATABASE_URL_UNPOOLED?.trim() ||
     process.env.POSTGRES_URL_NON_POOLING?.trim() ||
     process.env.DATABASE_URL?.trim() ||
@@ -59,7 +60,7 @@ export function getPrismaClient() {
   const databaseUrl = getPrismaDatabaseUrl();
   if (!databaseUrl) {
     throw new Error(
-      "Prisma requires DIRECT_URL, DATABASE_URL_UNPOOLED, POSTGRES_URL_NON_POOLING, DATABASE_URL, or POSTGRES_URL.",
+      "Prisma requires DIRECT_URL, POSTGRES_PRISMA_URL, DATABASE_URL_UNPOOLED, POSTGRES_URL_NON_POOLING, DATABASE_URL, or POSTGRES_URL.",
     );
   }
 
