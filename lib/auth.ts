@@ -105,7 +105,7 @@ export function setAuthCookie(res: Response, token: string) {
     maxAge: AUTH_COOKIE_TTL_SECONDS,
   });
 
-  res.set("Set-Cookie", serialized);
+  res.setHeader("Set-Cookie", serialized);
 }
 
 export function clearAuthCookie(res: Response) {
@@ -117,5 +117,5 @@ export function clearAuthCookie(res: Response) {
     maxAge: 0,
   });
 
-  res.set("Set-Cookie", serialized);
+  res.setHeader("Set-Cookie", serialized);
 }
