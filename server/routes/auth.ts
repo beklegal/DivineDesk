@@ -58,6 +58,24 @@ function logAuthError(scope: string, error: unknown) {
   console.error(`[auth] ${scope}`, error);
 }
 
+function logAuthInfo(scope: string, details: Record<string, unknown>) {
+  console.info(`[auth] ${scope} ${JSON.stringify(details)}`);
+}
+
+function logAuthWarn(scope: string, details: Record<string, unknown>) {
+  console.warn(`[auth] ${scope} ${JSON.stringify(details)}`);
+}
+
+function maskEmail(email: string) {
+  const [localPart, domainPart] = email.split("@");
+  if (!localPart || !domainPart) {
+    return "***";
+  }
+
+  const visibleLocalPart = localPart.slice(0, Math.min(2, localPart.length));
+  return `${visibleLocalPart}***@${domainPart}`;
+}
+
 function hasActiveChurchAccess(user: StoredUser, church: StoredChurch | null) {
   if (user.role === "super_admin") {
     return true;
@@ -181,6 +199,10 @@ export const handleLogin: RequestHandler = async (req, res) => {
     const parsed = loginRequestSchema.safeParse(req.body as LoginRequest);
 
     if (!parsed.success) {
+      logAuthWarn("login validation failed", {
+        requestId: (req as any).requestId ?? null,
+        message: parsed.error.issues[0]?.message ?? "Email and password are required",
+      });
       res
         .status(400)
         .json({ success: false, error: parsed.error.issues[0]?.message ?? "Email and password are required" });
@@ -217,15 +239,29 @@ export const handleLogin: RequestHandler = async (req, res) => {
     });
 
     if ("error" in result) {
+      logAuthWarn("login rejected", {
+        requestId: (req as any).requestId ?? null,
+        email: maskEmail(normalizedEmail),
+        statusCode: result.statusCode,
+      });
       res.status(result.statusCode).json({ success: false, error: result.error });
       return;
     }
 
+    logAuthInfo("login succeeded", {
+      requestId: (req as any).requestId ?? null,
+      userId: result.data.user.id,
+      role: result.data.user.role,
+      churchId: result.data.user.churchId ?? null,
+    });
     const authResponse = buildAuthResponse(result.data);
     setAuthCookie(res, authResponse.token);
     res.json(authResponse);
   } catch (error) {
-    logAuthError("login failed", error);
+    logAuthError(
+      `login failed requestId=${(req as any).requestId ?? "unknown"}`,
+      error,
+    );
     res.status(500).json({
       success: false,
       error: getErrorMessage(error, "Login failed"),
@@ -238,6 +274,11 @@ export const handleSignUp: RequestHandler = async (req, res) => {
     const parsed = signUpRequestSchema.safeParse(req.body as SignUpRequest);
 
     if (!parsed.success) {
+      logAuthWarn("signup validation failed", {
+        requestId: (req as any).requestId ?? null,
+        message:
+          parsed.error.issues[0]?.message ?? "All required fields must be completed",
+      });
       res.status(400).json({
         success: false,
         error: parsed.error.issues[0]?.message ?? "All required fields must be completed",
@@ -248,6 +289,11 @@ export const handleSignUp: RequestHandler = async (req, res) => {
     const { churchName, adminName, email, password, churchSize, billingPlanKey } = parsed.data;
 
     if (!isSubscriptionPlanKey(billingPlanKey)) {
+      logAuthWarn("signup rejected invalid billing plan", {
+        requestId: (req as any).requestId ?? null,
+        email: maskEmail(email.toLowerCase()),
+        billingPlanKey,
+      });
       res.status(400).json({ success: false, error: "Invalid billing plan selected" });
       return;
     }
@@ -334,10 +380,21 @@ export const handleSignUp: RequestHandler = async (req, res) => {
     });
 
     if ("error" in result) {
+      logAuthWarn("signup rejected existing user", {
+        requestId: (req as any).requestId ?? null,
+        email: maskEmail(normalizedEmail),
+      });
       res.status(409).json({ success: false, error: result.error });
       return;
     }
 
+    logAuthInfo("signup succeeded", {
+      requestId: (req as any).requestId ?? null,
+      userId: result.user.id,
+      email: maskEmail(normalizedEmail),
+      churchId: result.church.id,
+      billingPlanKey,
+    });
     const authResponse = buildAuthResponse({
       user: result.user,
       church: result.church,
@@ -347,7 +404,10 @@ export const handleSignUp: RequestHandler = async (req, res) => {
     setAuthCookie(res, authResponse.token);
     res.status(201).json(authResponse);
   } catch (error) {
-    logAuthError("signup failed", error);
+    logAuthError(
+      `signup failed requestId=${(req as any).requestId ?? "unknown"}`,
+      error,
+    );
     res.status(500).json({
       success: false,
       error: getErrorMessage(error, "Sign up failed"),

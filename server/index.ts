@@ -50,11 +50,53 @@ import {
 
 export function createServer() {
   const app = express();
+  const debugApiRequests = process.env.DEBUG_API_REQUESTS === "true";
 
   // Middleware
   app.use(cors());
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+  app.use((req: any, res, next) => {
+    if (!req.path.startsWith("/api")) {
+      next();
+      return;
+    }
+
+    const requestId =
+      req.requestId ??
+      (typeof req.headers["x-vercel-id"] === "string"
+        ? req.headers["x-vercel-id"]
+        : null) ??
+      `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const startedAt = Date.now();
+    req.requestId = requestId;
+
+    if (debugApiRequests || req.path.startsWith("/api/auth")) {
+      console.info(
+        `[api] request ${JSON.stringify({
+          requestId,
+          method: req.method,
+          path: req.originalUrl ?? req.url,
+        })}`,
+      );
+    }
+
+    res.on("finish", () => {
+      if (debugApiRequests || res.statusCode >= 400 || req.path.startsWith("/api/auth")) {
+        console.info(
+          `[api] response ${JSON.stringify({
+            requestId,
+            method: req.method,
+            path: req.originalUrl ?? req.url,
+            statusCode: res.statusCode,
+            durationMs: Date.now() - startedAt,
+          })}`,
+        );
+      }
+    });
+
+    next();
+  });
   app.use(authenticate);
 
   // ============= Authentication Routes =============
@@ -116,6 +158,16 @@ export function createServer() {
   });
 
   app.get("/api/demo", handleDemo);
+  app.use("/api", (req: any, res) => {
+    console.warn(
+      `[api] unmatched route ${JSON.stringify({
+        requestId: req.requestId ?? null,
+        method: req.method,
+        path: req.originalUrl ?? req.url,
+      })}`,
+    );
+    res.status(404).json({ success: false, error: "API endpoint not found" });
+  });
 
   return app;
 }
