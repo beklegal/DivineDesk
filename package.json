@@ -17,6 +17,7 @@
     "build:server": "vite build --config vite.config.server.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
+    "vercel-build": "node scripts/vercel-build.mjs",
     "start": "node dist/server/node-build.mjs",
     "test": "vitest --run",
     "format.fix": "prettier --write .",
