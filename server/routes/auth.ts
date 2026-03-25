@@ -3,7 +3,10 @@ import { z } from "zod";
 import type {
   AuthResponse,
   ChurchBranch,
+  ChurchEvent,
+  Donation,
   LoginRequest,
+  Member,
   SignUpRequest,
   SubscriptionPlanKey,
   User,
@@ -45,6 +48,190 @@ const signUpRequestSchema = z.object({
   churchSize: z.enum(["small", "medium", "large"]),
   billingPlanKey: z.enum(["starter", "growth", "enterprise", "custom"]),
 });
+
+const DEMO_CHURCH_ID = "church-shared-demo";
+const DEMO_USER_ID = "user-shared-demo-admin";
+const DEMO_EMAIL = "demo@divinedesk.app";
+
+function shiftDays(base: Date, days: number) {
+  const next = new Date(base);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function toIsoDate(value: Date) {
+  return value.toISOString().split("T")[0];
+}
+
+function buildDemoWorkspace() {
+  const now = new Date();
+  const createdAt = shiftDays(now, -21).toISOString();
+  const primaryBranch = createPrimaryBranch({
+    churchId: DEMO_CHURCH_ID,
+    createdAt,
+    createdByUserId: DEMO_USER_ID,
+    email: DEMO_EMAIL,
+    phone: "+233 20 555 0199",
+    address: "Airport Residential, Accra",
+  });
+
+  const church: StoredChurch = {
+    id: DEMO_CHURCH_ID,
+    name: "DivineDesk Demo Church",
+    size: "medium",
+    totalMembers: 0,
+    monthlyDonations: 0,
+    weeklyAttendance: 0,
+    createdAt,
+    lastUpdated: new Date().toISOString(),
+    status: "active",
+    adminName: "Demo Pastor",
+    adminEmail: DEMO_EMAIL,
+    email: DEMO_EMAIL,
+    phone: "+233 20 555 0199",
+    address: "Airport Residential, Accra",
+    website: "https://divinedesk.app/demo",
+    primaryBranchId: primaryBranch.id,
+    billing: createChurchBilling({
+      size: "medium",
+      planKey: "growth",
+      status: "trialing",
+      startedAt: shiftDays(now, -7).toISOString(),
+      billingEmail: DEMO_EMAIL,
+    }),
+  };
+
+  const user: StoredUser = {
+    id: DEMO_USER_ID,
+    name: "Demo Pastor",
+    email: DEMO_EMAIL,
+    password: "demo-access",
+    role: "admin",
+    churchId: DEMO_CHURCH_ID,
+    branchId: primaryBranch.id,
+    status: "active",
+    createdAt,
+    lastLoginAt: now.toISOString(),
+  };
+
+  const members: Member[] = [
+    {
+      id: "member-shared-demo-admin",
+      churchId: DEMO_CHURCH_ID,
+      branchId: primaryBranch.id,
+      name: "Demo Pastor",
+      email: DEMO_EMAIL,
+      phone: "+233 20 555 0199",
+      address: "Airport Residential, Accra",
+      ministryGroup: "Leadership",
+      joinDate: toIsoDate(shiftDays(now, -21)),
+      status: "active",
+      notes: "Primary admin account for the shared demo workspace.",
+    },
+    {
+      id: "member-shared-demo-ama",
+      churchId: DEMO_CHURCH_ID,
+      branchId: primaryBranch.id,
+      name: "Ama Boateng",
+      email: "ama.demo@divinedesk.app",
+      phone: "+233 24 111 2233",
+      address: "East Legon, Accra",
+      ministryGroup: "Worship",
+      joinDate: toIsoDate(shiftDays(now, -14)),
+      status: "active",
+      notes: "Demo member seeded for walkthroughs.",
+    },
+    {
+      id: "member-shared-demo-kwame",
+      churchId: DEMO_CHURCH_ID,
+      branchId: primaryBranch.id,
+      name: "Kwame Asare",
+      email: "kwame.demo@divinedesk.app",
+      phone: "+233 50 444 5566",
+      address: "Tema Community 5",
+      ministryGroup: "Ushering",
+      joinDate: toIsoDate(shiftDays(now, -9)),
+      status: "active",
+      notes: "Demo member seeded for giving and attendance examples.",
+    },
+    {
+      id: "member-shared-demo-linda",
+      churchId: DEMO_CHURCH_ID,
+      branchId: primaryBranch.id,
+      name: "Linda Mensah",
+      email: "linda.demo@divinedesk.app",
+      phone: "+233 27 777 8899",
+      address: "Spintex Road, Accra",
+      ministryGroup: "Children",
+      joinDate: toIsoDate(shiftDays(now, -4)),
+      status: "visitor",
+      notes: "Recent visitor record for the demo dashboard.",
+    },
+  ];
+
+  const donations: Donation[] = [
+    {
+      id: "donation-shared-demo-ama",
+      churchId: DEMO_CHURCH_ID,
+      branchId: primaryBranch.id,
+      memberId: "member-shared-demo-ama",
+      memberName: "Ama Boateng",
+      amount: 120,
+      type: "tithe",
+      date: toIsoDate(shiftDays(now, -6)),
+      notes: "Seeded demo tithe entry.",
+    },
+    {
+      id: "donation-shared-demo-kwame",
+      churchId: DEMO_CHURCH_ID,
+      branchId: primaryBranch.id,
+      memberId: "member-shared-demo-kwame",
+      memberName: "Kwame Asare",
+      amount: 50,
+      type: "offering",
+      date: toIsoDate(shiftDays(now, -2)),
+      notes: "Seeded demo offering entry.",
+    },
+  ];
+
+  const events: ChurchEvent[] = [
+    {
+      id: "event-shared-demo-sunday",
+      churchId: DEMO_CHURCH_ID,
+      branchId: primaryBranch.id,
+      name: "Sunday Celebration Service",
+      date: toIsoDate(shiftDays(now, -3)),
+      time: "09:00",
+      location: "Main Auditorium",
+      description: "A completed service in the demo workspace with attendance data.",
+      type: "service",
+      status: "completed",
+      registeredAttendees: 42,
+    },
+    {
+      id: "event-shared-demo-prayer",
+      churchId: DEMO_CHURCH_ID,
+      branchId: primaryBranch.id,
+      name: "Midweek Prayer Gathering",
+      date: toIsoDate(shiftDays(now, 3)),
+      time: "18:30",
+      location: "Main Campus Prayer Hall",
+      description: "An upcoming event so new users can preview the calendar flow.",
+      type: "meeting",
+      status: "scheduled",
+      registeredAttendees: 0,
+    },
+  ];
+
+  return {
+    church,
+    branch: primaryBranch,
+    user,
+    members,
+    donations,
+    events,
+  };
+}
 
 function isSubscriptionPlanKey(value: unknown): value is SubscriptionPlanKey {
   return BILLING_PLANS.some((plan) => plan.key === value);
@@ -265,6 +452,62 @@ export const handleLogin: RequestHandler = async (req, res) => {
     res.status(500).json({
       success: false,
       error: getErrorMessage(error, "Login failed"),
+    });
+  }
+};
+
+export const handleDemoLogin: RequestHandler = async (req, res) => {
+  try {
+    const result = await updateDatabase((database) => {
+      const demoWorkspace = buildDemoWorkspace();
+
+      database.churches = database.churches.filter((church) => church.id !== DEMO_CHURCH_ID);
+      database.branches = database.branches.filter((branch) => branch.churchId !== DEMO_CHURCH_ID);
+      database.users = database.users.filter(
+        (user) => user.id !== DEMO_USER_ID && user.churchId !== DEMO_CHURCH_ID,
+      );
+      database.members = database.members.filter((member) => member.churchId !== DEMO_CHURCH_ID);
+      database.donations = database.donations.filter(
+        (donation) => donation.churchId !== DEMO_CHURCH_ID,
+      );
+      database.events = database.events.filter((event) => event.churchId !== DEMO_CHURCH_ID);
+      database.attendance = database.attendance.filter(
+        (entry) => entry.churchId !== DEMO_CHURCH_ID,
+      );
+      database.subscriptionPayments = (database.subscriptionPayments ?? []).filter(
+        (payment) => payment.churchId !== DEMO_CHURCH_ID,
+      );
+
+      database.churches.push(demoWorkspace.church);
+      database.branches.push(demoWorkspace.branch);
+      database.users.push(demoWorkspace.user);
+      database.members.push(...demoWorkspace.members);
+      database.donations.push(...demoWorkspace.donations);
+      database.events.push(...demoWorkspace.events);
+
+      return {
+        user: demoWorkspace.user,
+        church: demoWorkspace.church,
+        branch: demoWorkspace.branch,
+      };
+    });
+
+    logAuthInfo("demo login succeeded", {
+      requestId: (req as any).requestId ?? null,
+      userId: result.user.id,
+      churchId: result.church.id,
+    });
+    const authResponse = buildAuthResponse(result);
+    setAuthCookie(res, authResponse.token);
+    res.json(authResponse);
+  } catch (error) {
+    logAuthError(
+      `demo login failed requestId=${(req as any).requestId ?? "unknown"}`,
+      error,
+    );
+    res.status(500).json({
+      success: false,
+      error: getErrorMessage(error, "Demo access failed"),
     });
   }
 };

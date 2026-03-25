@@ -4,6 +4,7 @@ import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { AuthResponse } from "@shared/api";
 import {
   ArrowRight,
   Loader,
@@ -18,19 +19,37 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [activeAction, setActiveAction] = useState<"login" | "demo" | null>(null);
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, loginDemo } = useAuth();
+  const isLoading = activeAction !== null;
 
-  const handleSuccessfulLogin = async (nextEmail: string, nextPassword: string) => {
-    const authData = await login(nextEmail, nextPassword);
-
+  const navigateAfterAuth = (authData: AuthResponse) => {
     if (authData?.user?.role === "super_admin") {
       navigate("/admin-dashboard");
       return;
     }
 
     navigate("/dashboard");
+  };
+
+  const handleSuccessfulLogin = async (nextEmail: string, nextPassword: string) => {
+    const authData = await login(nextEmail, nextPassword);
+    navigateAfterAuth(authData);
+  };
+
+  const handleDemoAccess = async () => {
+    setError("");
+    setActiveAction("demo");
+
+    try {
+      const authData = await loginDemo();
+      navigateAfterAuth(authData);
+    } catch (demoError) {
+      setError(demoError instanceof Error ? demoError.message : "Demo access failed");
+    } finally {
+      setActiveAction(null);
+    }
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -42,14 +61,14 @@ export default function Login() {
     }
 
     setError("");
-    setIsLoading(true);
+    setActiveAction("login");
 
     try {
       await handleSuccessfulLogin(email, password);
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : "Login failed");
     } finally {
-      setIsLoading(false);
+      setActiveAction(null);
     }
   };
 
@@ -127,7 +146,7 @@ export default function Login() {
               Access your workspace
             </h2>
             <p className="mt-3 text-base leading-7 text-slate-600">
-              Sign in with your live church account. Demo workspaces have been cleared from the system.
+              Sign in with your church account, or open the guided demo workspace to explore the product before starting your own free trial.
             </p>
           </div>
 
@@ -179,7 +198,7 @@ export default function Login() {
               disabled={isLoading}
               className="h-12 w-full rounded-2xl bg-slate-950 text-white hover:bg-slate-800"
             >
-              {isLoading ? (
+              {activeAction === "login" ? (
                 <>
                   <Loader className="mr-2 h-4 w-4 animate-spin" />
                   Signing in
@@ -189,9 +208,32 @@ export default function Login() {
                   Continue to dashboard
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </>
-              )}
+                )}
             </Button>
           </form>
+
+          <div className="mt-6 rounded-[28px] border border-slate-200 bg-slate-50 px-5 py-5">
+            <p className="text-sm font-semibold text-slate-900">Want to look around first?</p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Open a seeded demo workspace with members, donations, events, and an active free-trial setup. No card needed.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void handleDemoAccess()}
+              disabled={isLoading}
+              className="mt-4 h-11 w-full rounded-2xl border-slate-300 bg-white text-slate-950 hover:bg-slate-100"
+            >
+              {activeAction === "demo" ? (
+                <>
+                  <Loader className="mr-2 h-4 w-4 animate-spin" />
+                  Opening demo workspace
+                </>
+              ) : (
+                "Try demo account"
+              )}
+            </Button>
+          </div>
 
           <div className="mt-8 rounded-[28px] border border-slate-200 bg-slate-50 px-5 py-4 text-sm leading-6 text-slate-600">
             New workspaces start with a 30-day free trial, then move to the monthly subscription you selected at signup.

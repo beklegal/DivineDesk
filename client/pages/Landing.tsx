@@ -126,7 +126,7 @@ export default function Landing() {
                   variant="outline"
                   className="h-12 rounded-2xl border-slate-300 bg-white px-6 text-slate-900 hover:bg-slate-50"
                 >
-                  Explore demo access
+                  Try demo account
                 </Button>
               </Link>
             </div>
@@ -364,12 +364,12 @@ export default function Landing() {
               Launch a workspace your team will actually enjoy using.
             </h2>
             <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-slate-300">
-              Sign in with the seeded demo accounts or create a new church and start with a persistent setup from day one.
+              Try the guided demo workspace first, or create a new church account and start with your own 30-day free trial.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link to="/login">
                 <Button className="h-12 rounded-2xl bg-white px-6 text-slate-950 hover:bg-slate-100">
-                  Open demo access
+                  Try demo account
                 </Button>
               </Link>
               <Link to="/signup">

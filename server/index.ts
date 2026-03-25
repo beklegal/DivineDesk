@@ -4,6 +4,7 @@ import cors from "cors";
 import { handleDemo } from "./routes/demo.js";
 import {
   handleLogin,
+  handleDemoLogin,
   handleSignUp,
   handleLogout,
   handleGetMe,
@@ -101,6 +102,7 @@ export function createServer() {
 
   // ============= Authentication Routes =============
   app.post("/api/auth/login", handleLogin);
+  app.post("/api/auth/demo", handleDemoLogin);
   app.post("/api/auth/signup", handleSignUp);
   app.post("/api/auth/logout", handleLogout);
   app.get("/api/auth/me", handleGetMe);

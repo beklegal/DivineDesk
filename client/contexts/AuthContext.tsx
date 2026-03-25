@@ -15,6 +15,7 @@ interface AuthContextType {
   isLoading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<AuthResponse>;
+  loginDemo: () => Promise<AuthResponse>;
   signup: (
     churchName: string,
     adminName: string,
@@ -202,6 +203,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const loginDemo = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/auth/demo", {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await readJsonResponse<AuthResponse & { error?: string }>(response);
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Demo access failed");
+      }
+
+      if (!isAuthResponse(data)) {
+        throw new Error("Unexpected demo response from server");
+      }
+
+      persistSession({
+        token: data.token,
+        user: data.user,
+        church: data.church ?? null,
+        branch: data.branch ?? null,
+      });
+
+      return data;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Demo access failed";
+      setError(message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const signup = async (
     churchName: string,
     adminName: string,
@@ -281,6 +318,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading,
     error,
     login,
+    loginDemo,
     signup,
     logout,
     refreshSession,
