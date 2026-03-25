@@ -25,6 +25,7 @@ import {
 } from "../lib/branches.js";
 import { ensureChurchBilling } from "../lib/billing.js";
 import { hashPassword, isPasswordHash } from "../../lib/auth.js";
+import { getRuntimeDatabaseUrl } from "../../lib/database-env.js";
 import { getPrismaClient } from "../../lib/prisma.js";
 import type { PrismaUserRecord } from "../../lib/prisma.js";
 
@@ -268,22 +269,7 @@ if (typeof WebSocket === "undefined") {
   neonConfig.webSocketConstructor = ws;
 }
 
-function normalizeOptionalEnvironmentValue(value?: string | null) {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
-}
-
-function getExternalDatabaseUrl() {
-  return (
-    normalizeOptionalEnvironmentValue(process.env.DIVINEDESK_DATABASE_URL) ??
-    normalizeOptionalEnvironmentValue(process.env.DATABASE_URL_UNPOOLED) ??
-    normalizeOptionalEnvironmentValue(process.env.POSTGRES_URL_NON_POOLING) ??
-    normalizeOptionalEnvironmentValue(process.env.DATABASE_URL) ??
-    normalizeOptionalEnvironmentValue(process.env.POSTGRES_URL)
-  );
-}
-
-const EXTERNAL_DATABASE_URL = getExternalDatabaseUrl();
+const EXTERNAL_DATABASE_URL = getRuntimeDatabaseUrl();
 const USE_EXTERNAL_DATABASE = Boolean(EXTERNAL_DATABASE_URL);
 const USE_PRISMA_USER_STORE = Boolean(EXTERNAL_DATABASE_URL);
 

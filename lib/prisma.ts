@@ -1,4 +1,5 @@
 import * as PrismaClientModule from "@prisma/client";
+import { getPrismaDatabaseUrl as resolvePrismaDatabaseUrl } from "./database-env.js";
 
 export interface PrismaUserRecord {
   id: string;
@@ -35,15 +36,7 @@ const globalForPrisma = globalThis as typeof globalThis & {
 };
 
 export function getPrismaDatabaseUrl() {
-  return (
-    process.env.DIRECT_URL?.trim() ||
-    process.env.POSTGRES_PRISMA_URL?.trim() ||
-    process.env.DATABASE_URL_UNPOOLED?.trim() ||
-    process.env.POSTGRES_URL_NON_POOLING?.trim() ||
-    process.env.DATABASE_URL?.trim() ||
-    process.env.POSTGRES_URL?.trim() ||
-    null
-  );
+  return resolvePrismaDatabaseUrl();
 }
 
 export function getPrismaClient() {

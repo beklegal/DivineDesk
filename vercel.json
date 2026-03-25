@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
-  "buildCommand": "DIRECT_URL=$POSTGRES_PRISMA_URL pnpm prisma:generate && DIRECT_URL=$POSTGRES_PRISMA_URL pnpm prisma:migrate && pnpm build:client",
+  "buildCommand": "DATABASE_URL=${DATABASE_URL:-${POSTGRES_URL:-$POSTGRES_URL_NON_POOLING}} DIRECT_URL=${DIRECT_URL:-${POSTGRES_PRISMA_URL:-$POSTGRES_URL_NON_POOLING}} pnpm prisma:generate && DATABASE_URL=${DATABASE_URL:-${POSTGRES_URL:-$POSTGRES_URL_NON_POOLING}} DIRECT_URL=${DIRECT_URL:-${POSTGRES_PRISMA_URL:-$POSTGRES_URL_NON_POOLING}} pnpm prisma:migrate && pnpm build:client",
   "outputDirectory": "dist/spa",
   "functions": {
     "api/**/*.ts": {
