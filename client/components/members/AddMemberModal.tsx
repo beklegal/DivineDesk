@@ -87,7 +87,8 @@ export function AddMemberModal({
       });
 
       if (!response.ok) {
-        throw new Error("Failed to add member");
+        const payload = await response.json();
+        throw new Error(payload.error || "Failed to add member");
       }
 
       setFormData({

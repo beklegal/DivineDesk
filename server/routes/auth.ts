@@ -11,7 +11,7 @@ import type {
   SubscriptionPlanKey,
   User,
 } from "../../shared/api.js";
-import { BILLING_PLANS } from "../../shared/api.js";
+import { isSelfServeBillingPlanKey, isSubscriptionPlanKey } from "../../shared/api.js";
 import {
   createId,
   readDatabase,
@@ -231,10 +231,6 @@ function buildDemoWorkspace() {
     donations,
     events,
   };
-}
-
-function isSubscriptionPlanKey(value: unknown): value is SubscriptionPlanKey {
-  return BILLING_PLANS.some((plan) => plan.key === value);
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -531,13 +527,16 @@ export const handleSignUp: RequestHandler = async (req, res) => {
 
     const { churchName, adminName, email, password, churchSize, billingPlanKey } = parsed.data;
 
-    if (!isSubscriptionPlanKey(billingPlanKey)) {
-      logAuthWarn("signup rejected invalid billing plan", {
+    if (!isSubscriptionPlanKey(billingPlanKey) || !isSelfServeBillingPlanKey(billingPlanKey)) {
+      logAuthWarn("signup rejected unsupported billing plan", {
         requestId: (req as any).requestId ?? null,
         email: maskEmail(email.toLowerCase()),
         billingPlanKey,
       });
-      res.status(400).json({ success: false, error: "Invalid billing plan selected" });
+      res.status(400).json({
+        success: false,
+        error: "Choose Starter, Growth, or Enterprise during signup. Custom plans are quoted separately.",
+      });
       return;
     }
 

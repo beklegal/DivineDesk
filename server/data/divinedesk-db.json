@@ -2,7 +2,7 @@
   "meta": {
     "version": 1,
     "createdAt": "2026-03-17T02:17:59.866Z",
-    "lastUpdated": "2026-03-20T22:10:57.531Z"
+    "lastUpdated": "2026-04-01T15:25:38.138Z"
   },
   "churches": [
     {
@@ -13,10 +13,8 @@
       "monthlyDonations": 0,
       "weeklyAttendance": 0,
       "createdAt": "2026-03-18T10:15:39.840Z",
-      "lastUpdated": "2026-03-20T12:45:54.857Z",
+      "lastUpdated": "2026-04-01T15:22:47.618Z",
       "status": "active",
-      "adminName": "BEKS",
-      "adminEmail": "evansboamah8@gmail.com",
       "email": "evansboamah8@gmail.com",
       "primaryBranchId": "branch-church-1773828939841-j6mqbl-primary",
       "billing": {
@@ -41,10 +39,8 @@
       "monthlyDonations": 0,
       "weeklyAttendance": 0,
       "createdAt": "2026-03-18T11:31:19.516Z",
-      "lastUpdated": "2026-03-20T12:44:20.758Z",
+      "lastUpdated": "2026-04-01T15:22:42.891Z",
       "status": "active",
-      "adminName": "evans",
-      "adminEmail": "legaltechrescue@gmail.com",
       "email": "legaltechrescue@gmail.com",
       "phone": "0544188950",
       "address": "P.O.BOX 140 EFFIDUASE-KOFORIDUA.",
@@ -60,8 +56,8 @@
         "status": "trialing",
         "billingEmail": "legaltechrescue@gmail.com",
         "startedAt": "2026-03-18T11:31:19.516Z",
-        "renewalDate": "2026-04-19",
-        "trialEndsAt": "2026-04-19"
+        "renewalDate": "2026-04-01",
+        "trialEndsAt": "2026-05-01"
       }
     }
   ],
@@ -109,43 +105,7 @@
       "branchId": null,
       "status": "active",
       "createdAt": "2024-09-24T02:17:59.866Z",
-      "lastLoginAt": "2026-03-20T12:52:41.150Z"
-    },
-    {
-      "id": "user-1773828939841-g9iv6m",
-      "name": "BEKS",
-      "email": "evansboamah8@gmail.com",
-      "password": "$2b$10$MWl9/ZxrMWn2AcDkaW4GhOznEqjb/a8prKY6.sA0taN3wAAGth44G",
-      "role": "admin",
-      "churchId": "church-1773828939841-j6mqbl",
-      "branchId": null,
-      "status": "active",
-      "createdAt": "2026-03-18T10:15:39.840Z",
-      "lastLoginAt": "2026-03-20T14:49:12.201Z"
-    },
-    {
-      "id": "user-1773833479518-8wanx7",
-      "name": "evans",
-      "email": "legaltechrescue@gmail.com",
-      "password": "$2b$10$O3ZA0.Xor2Wtf/jwftVYweYH.rViZodWGhBvYfHo4hgPshOCFy6JK",
-      "role": "admin",
-      "churchId": "church-1773833479517-s392pd",
-      "branchId": null,
-      "status": "active",
-      "createdAt": "2026-03-18T11:31:19.516Z",
-      "lastLoginAt": "2026-03-20T12:45:07.710Z"
-    },
-    {
-      "id": "user-1773833848452-wfhcxh",
-      "name": "kofi",
-      "email": "2323@gmail.com",
-      "password": "$2b$10$JNOsLHUsAUky6bigBMrAgeG5JHlBjJiMyIFh9shOVOXP6uo3Z56Rm",
-      "role": "branch_admin",
-      "churchId": "church-1773833479517-s392pd",
-      "branchId": "branch-1773833754426-7zbjm7",
-      "status": "active",
-      "createdAt": "2026-03-18T11:37:28.452Z",
-      "lastLoginAt": "2026-03-20T12:45:17.439Z"
+      "lastLoginAt": "2026-04-01T15:16:40.264Z"
     }
   ],
   "members": [

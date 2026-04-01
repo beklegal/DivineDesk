@@ -4,6 +4,7 @@ import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatUserRole } from "@/lib/auth";
+import { churchHasBillingFeature, findBillingPlan } from "@/lib/billing";
 import { formatChurchCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import Sidebar from "@/components/dashboard/Sidebar";
@@ -37,13 +38,19 @@ export function AppShell({
     navigate("/login");
   };
 
+  const currentPlan = church ? findBillingPlan(church.billing.planKey) : null;
+  const hasGivingAccess = churchHasBillingFeature(church, "giving");
   const heroStats = church
     ? [
         { label: "Members", value: church.totalMembers.toString() },
-        {
-          label: "Monthly giving",
-          value: formatChurchCurrency(church.monthlyDonations || 0, { compact: true }),
-        },
+        ...(hasGivingAccess
+          ? [
+              {
+                label: "Monthly giving",
+                value: formatChurchCurrency(church.monthlyDonations || 0, { compact: true }),
+              },
+            ]
+          : [{ label: "Plan", value: currentPlan?.name ?? "Starter" }]),
         { label: "Attendance", value: `${church.weeklyAttendance || 0}/week` },
       ]
     : [];

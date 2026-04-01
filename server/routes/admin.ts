@@ -2,8 +2,11 @@ import { RequestHandler } from "express";
 import type {
   AdminDashboardStats,
   AdminUserSummary,
+  BillingPlanFeature,
+  BillingReportAccessLevel,
   ChurchBranch,
   Church,
+  ChurchBillingEntitlementOverrides,
   ChurchStatus,
   ChurchAdmin,
   CreateChurchRequest,
@@ -12,6 +15,8 @@ import type {
   UpdateChurchRequest,
 } from "../../shared/api.js";
 import {
+  BILLING_PLAN_FEATURES,
+  BILLING_REPORT_ACCESS_LEVELS,
   SUBSCRIPTION_PLAN_KEYS,
   SUBSCRIPTION_STATUSES,
 } from "../../shared/api.js";
@@ -69,6 +74,95 @@ function isSubscriptionPlanKey(value: unknown) {
 
 function isSubscriptionStatus(value: unknown) {
   return SUBSCRIPTION_STATUSES.includes(value as any);
+}
+
+function isBillingReportAccessLevel(value: unknown): value is BillingReportAccessLevel {
+  return BILLING_REPORT_ACCESS_LEVELS.includes(value as BillingReportAccessLevel);
+}
+
+function isBillingPlanFeature(value: unknown): value is BillingPlanFeature {
+  return BILLING_PLAN_FEATURES.includes(value as BillingPlanFeature);
+}
+
+function normalizeBillingFeatureOverrides(value: unknown) {
+  if (value === undefined) {
+    return { data: undefined as BillingPlanFeature[] | undefined };
+  }
+
+  if (!Array.isArray(value) || !value.every((item) => isBillingPlanFeature(item))) {
+    return { error: "Invalid billing feature override" as const };
+  }
+
+  return {
+    data: Array.from(new Set(value)),
+  };
+}
+
+function normalizeBillingEntitlementOverrides(
+  value: unknown,
+): { data: ChurchBillingEntitlementOverrides | undefined | null } | { error: string } {
+  if (value === null) {
+    return { data: null };
+  }
+
+  if (value === undefined) {
+    return { data: undefined };
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { error: "Invalid entitlement override configuration" };
+  }
+
+  const overrides = value as Record<string, unknown>;
+  const normalized: ChurchBillingEntitlementOverrides = {};
+
+  if (hasOwnProperty(overrides, "memberLimit")) {
+    if (overrides.memberLimit === null) {
+      normalized.memberLimit = null;
+    } else if (
+      typeof overrides.memberLimit === "number" &&
+      Number.isInteger(overrides.memberLimit) &&
+      overrides.memberLimit > 0
+    ) {
+      normalized.memberLimit = overrides.memberLimit;
+    } else {
+      return { error: "Member limit override must be a whole number greater than zero or null for unlimited" };
+    }
+  }
+
+  if (hasOwnProperty(overrides, "reportAccess")) {
+    if (overrides.reportAccess === undefined) {
+      // no-op
+    } else if (isBillingReportAccessLevel(overrides.reportAccess)) {
+      normalized.reportAccess = overrides.reportAccess;
+    } else {
+      return { error: "Invalid report access override" };
+    }
+  }
+
+  const enabledFeaturesResult = normalizeBillingFeatureOverrides(overrides.enabledFeatures);
+  if ("error" in enabledFeaturesResult) {
+    return { error: enabledFeaturesResult.error };
+  }
+
+  const disabledFeaturesResult = normalizeBillingFeatureOverrides(overrides.disabledFeatures);
+  if ("error" in disabledFeaturesResult) {
+    return { error: disabledFeaturesResult.error };
+  }
+
+  if (enabledFeaturesResult.data?.length) {
+    normalized.enabledFeatures = enabledFeaturesResult.data.filter(
+      (feature) => !disabledFeaturesResult.data?.includes(feature),
+    );
+  }
+
+  if (disabledFeaturesResult.data?.length) {
+    normalized.disabledFeatures = disabledFeaturesResult.data;
+  }
+
+  return {
+    data: Object.keys(normalized).length > 0 ? normalized : undefined,
+  };
 }
 
 function requireSuperAdmin(req: any, res: any) {
@@ -394,6 +488,15 @@ export const handleUpdateChurch: RequestHandler = async (req: any, res) => {
       return;
     }
 
+    const entitlementOverridesResult = billingUpdate && hasOwnProperty(billingUpdate, "entitlementOverrides")
+      ? normalizeBillingEntitlementOverrides(billingUpdate.entitlementOverrides)
+      : { data: undefined as ChurchBillingEntitlementOverrides | undefined | null };
+
+    if ("error" in entitlementOverridesResult) {
+      res.status(400).json({ success: false, error: entitlementOverridesResult.error });
+      return;
+    }
+
     const result = await updateDatabase((database) => {
       const church = database.churches.find((candidate) => candidate.id === churchId);
 
@@ -499,6 +602,9 @@ export const handleUpdateChurch: RequestHandler = async (req: any, res) => {
             : undefined,
           lastPaymentAt: hasOwnProperty(billingUpdate, "lastPaymentAt")
             ? normalizeOptionalString(billingUpdate.lastPaymentAt)
+            : undefined,
+          entitlementOverrides: hasOwnProperty(billingUpdate, "entitlementOverrides")
+            ? entitlementOverridesResult.data
             : undefined,
         });
       }

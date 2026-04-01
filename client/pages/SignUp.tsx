@@ -11,10 +11,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BILLING_PLANS, type SubscriptionPlanKey } from "@shared/api";
+import {
+  BILLING_PLANS,
+  getSelfServeBillingPlans,
+  type SubscriptionPlanKey,
+} from "@shared/api";
 import { ArrowRight, BadgeCheck, CheckCircle2, Loader, Sparkles } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { findBillingPlan, formatSubscriptionAmount, getBillingTrialLabel } from "@/lib/billing";
+import { findBillingPlan, getBillingPlanSummary, getBillingTrialLabel } from "@/lib/billing";
+
+const selfServePlans = getSelfServeBillingPlans();
+const defaultBillingPlanKey = selfServePlans[0]?.key ?? "starter";
+
+function getRecommendedPlanKey(churchSize: string): SubscriptionPlanKey {
+  if (churchSize === "large") {
+    return "enterprise";
+  }
+
+  if (churchSize === "medium") {
+    return "growth";
+  }
+
+  return "starter";
+}
 
 export default function SignUp() {
   const [step, setStep] = useState(1);
@@ -24,12 +43,13 @@ export default function SignUp() {
     email: "",
     password: "",
     churchSize: "",
-    billingPlanKey: BILLING_PLANS[0].key as SubscriptionPlanKey,
+    billingPlanKey: defaultBillingPlanKey as SubscriptionPlanKey,
   });
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { signup } = useAuth();
+  const selectedPlan = findBillingPlan(formData.billingPlanKey);
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
@@ -107,7 +127,8 @@ export default function SignUp() {
               Launch your church workspace
             </h1>
             <p className="mt-3 text-base leading-7 text-slate-600">
-              Start with a polished dashboard, a persistent church record, and a {getBillingTrialLabel().toLowerCase()} before your $10 monthly subscription begins.
+              Start with a polished dashboard, a persistent church record, and a{" "}
+              {getBillingTrialLabel().toLowerCase()} before your selected plan goes live.
             </p>
           </div>
 
@@ -214,7 +235,11 @@ export default function SignUp() {
                 <Select
                   value={formData.churchSize}
                   onValueChange={(value) => {
-                    setFormData((previous) => ({ ...previous, churchSize: value }));
+                    setFormData((previous) => ({
+                      ...previous,
+                      churchSize: value,
+                      billingPlanKey: getRecommendedPlanKey(value),
+                    }));
                     setError("");
                   }}
                 >
@@ -247,15 +272,40 @@ export default function SignUp() {
                     <SelectValue placeholder="Choose your billing plan" />
                   </SelectTrigger>
                   <SelectContent>
-                    {BILLING_PLANS.map((plan) => (
+                    {selfServePlans.map((plan) => (
                       <SelectItem key={plan.key} value={plan.key}>
-                        {plan.name} - {formatSubscriptionAmount(plan.amount)}/month
+                        {getBillingPlanSummary(plan)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                  {findBillingPlan(formData.billingPlanKey).description}
+                <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-950">{selectedPlan.name}</p>
+                      <p className="mt-1 text-xs uppercase tracking-[0.24em] text-slate-400">
+                        {selectedPlan.targetProfile}
+                      </p>
+                    </div>
+                    <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200">
+                      {selectedPlan.publicPriceLabel}
+                    </div>
+                  </div>
+                  <p className="mt-4 text-sm leading-6 text-slate-600">
+                    {selectedPlan.description}
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    {selectedPlan.highlights.map((highlight) => (
+                      <div key={highlight} className="flex items-start gap-3 text-sm text-slate-600">
+                        <BadgeCheck className="mt-0.5 h-4 w-4 text-emerald-500" />
+                        <p>{highlight}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-3 text-sm text-slate-600">
+                  Need a tailored rollout? Custom plans are quoted separately for mega churches,
+                  dedicated support, and deeper integrations.
                 </div>
               </div>
 
@@ -303,32 +353,59 @@ export default function SignUp() {
           <div className="relative">
             <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.28em] text-slate-200">
               <Sparkles className="h-3.5 w-3.5 text-amber-300" />
-              Ready on day one
+              Pricing lineup
             </div>
 
             <h2 className="mt-6 text-5xl font-semibold leading-[1.04] text-white">
-              Set up once, then keep building without losing your data.
+              Pick the tier that fits today and still leaves room to grow.
             </h2>
             <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-300">
-              New churches start with a real persisted workspace, a primary branch, and a {getBillingTrialLabel().toLowerCase()}. After that, church admin billing is {formatSubscriptionAmount(BILLING_PLANS[0].amount)} per month.
+              Every new church starts with a real persisted workspace, a primary branch, and a{" "}
+              {getBillingTrialLabel().toLowerCase()}. After that, billing follows the tier you
+              choose, while custom plans are quoted with the platform team.
             </p>
 
             <div className="mt-10 space-y-4">
-              {[
-                "Create a church profile with leadership ownership",
-                "Start with a primary branch and add more branches later as your ministry grows",
-                "Choose from Starter, Growth, Enterprise, or a Custom plan during signup",
-                "Save members, donations, events, and attendance in a shared database",
-                "Open a clean dashboard with better reporting and navigation",
-              ].map((item) => (
+              {BILLING_PLANS.map((plan) => {
+                const isSelected = plan.key === selectedPlan.key;
+
+                return (
                 <div
-                  key={item}
-                  className="flex items-start gap-4 rounded-[28px] border border-white/10 bg-white/10 px-5 py-4 backdrop-blur"
+                  key={plan.key}
+                  className={`rounded-[28px] border px-5 py-5 backdrop-blur transition ${
+                    isSelected
+                      ? "border-amber-300/70 bg-white/16 shadow-[0_24px_60px_-42px_rgba(251,191,36,0.8)]"
+                      : "border-white/10 bg-white/10"
+                  }`}
                 >
-                  <BadgeCheck className="mt-1 h-5 w-5 text-amber-300" />
-                  <p className="text-sm leading-7 text-slate-300">{item}</p>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xl font-semibold text-white">{plan.name}</p>
+                      <p className="mt-1 text-xs uppercase tracking-[0.24em] text-slate-400">
+                        {plan.targetProfile}
+                      </p>
+                    </div>
+                    <div className="rounded-full border border-white/10 bg-slate-950/40 px-3 py-1 text-xs font-semibold text-amber-200">
+                      {plan.publicPriceLabel}
+                    </div>
+                  </div>
+                  <p className="mt-4 text-sm leading-6 text-slate-300">{plan.description}</p>
+                  <div className="mt-4 space-y-3">
+                    {plan.highlights.map((highlight) => (
+                      <div key={highlight} className="flex items-start gap-3">
+                        <BadgeCheck className="mt-0.5 h-4 w-4 text-amber-300" />
+                        <p className="text-sm leading-6 text-slate-300">{highlight}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-4 text-xs uppercase tracking-[0.22em] text-slate-400">
+                    {plan.selfServeEnabled
+                      ? "Available during signup"
+                      : "Custom pricing arranged with the platform team"}
+                  </p>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </section>

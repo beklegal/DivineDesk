@@ -9,6 +9,7 @@ import { AddMemberModal } from "@/components/members/AddMemberModal";
 import { canManageChurchWorkspace } from "@shared/permissions";
 import { useChurchWorkspace } from "@/hooks/useChurchWorkspace";
 import { formatUserRole } from "@/lib/auth";
+import { getChurchMemberLimit } from "@/lib/billing";
 
 export default function Members() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -18,6 +19,7 @@ export default function Members() {
   const { branches, currentBranch } = useChurchWorkspace();
   const navigate = useNavigate();
   const canChooseBranch = canManageChurchWorkspace(user);
+  const memberLimit = getChurchMemberLimit(church);
 
   const handleLogout = () => {
     logout();
@@ -100,6 +102,7 @@ export default function Members() {
               onRefresh={() => setRefreshTrigger((prev) => prev + 1)}
               refreshTrigger={refreshTrigger}
               branches={branches}
+              memberLimit={memberLimit}
             />
           </div>
         </div>

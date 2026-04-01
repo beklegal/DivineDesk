@@ -2,8 +2,11 @@ import crypto from "crypto";
 import type {
   AdminBillingPlan,
   BillingPlan,
+  BillingPlanFeature,
+  BillingReportAccessLevel,
   Church,
   ChurchBilling,
+  ChurchBillingEntitlementOverrides,
   CreatePaystackCheckoutRequest,
   PaystackCheckoutResponse,
   SubscriptionPlanKey,
@@ -136,12 +139,49 @@ function resolveBillingStatus(options: {
 
 function getPlanAmount(plan: BillingPlan, amount?: number) {
   const normalizedAmount = toPositiveNumber(amount);
+  // Preserve a church's stored billed amount until an explicit plan or price update is made.
+  if (normalizedAmount) {
+    return normalizedAmount;
+  }
+  return plan.amount;
+}
 
-  if (plan.key === "custom") {
-    return normalizedAmount ?? plan.amount;
+function normalizeBillingFeatureList(features?: BillingPlanFeature[]) {
+  return features ? Array.from(new Set(features)) : undefined;
+}
+
+function normalizeEntitlementOverrides(
+  overrides?: ChurchBillingEntitlementOverrides | null,
+): ChurchBillingEntitlementOverrides | undefined {
+  if (!overrides) {
+    return undefined;
   }
 
-  return plan.amount;
+  const normalized: ChurchBillingEntitlementOverrides = {};
+
+  if (Object.prototype.hasOwnProperty.call(overrides, "memberLimit")) {
+    normalized.memberLimit =
+      overrides.memberLimit === null ? null : toPositiveNumber(overrides.memberLimit);
+  }
+
+  if (overrides.reportAccess) {
+    normalized.reportAccess = overrides.reportAccess as BillingReportAccessLevel;
+  }
+
+  const enabledFeatures = normalizeBillingFeatureList(overrides.enabledFeatures);
+  const disabledFeatures = normalizeBillingFeatureList(overrides.disabledFeatures);
+
+  if (enabledFeatures?.length) {
+    normalized.enabledFeatures = enabledFeatures.filter(
+      (feature) => !disabledFeatures?.includes(feature),
+    );
+  }
+
+  if (disabledFeatures?.length) {
+    normalized.disabledFeatures = disabledFeatures;
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
 export function inferPlanKeyFromChurchSize(size: Church["size"]): SubscriptionPlanKey {
@@ -174,14 +214,27 @@ export function getPaystackPlanCode(planKey: SubscriptionPlanKey) {
   return normalizeOptionalString(envMap[planKey]);
 }
 
+export function getPaystackCheckoutUrl(planKey: SubscriptionPlanKey) {
+  const envMap: Record<SubscriptionPlanKey, string | undefined> = {
+    starter: process.env.PAYSTACK_STARTER_CHECKOUT_URL,
+    growth: process.env.PAYSTACK_GROWTH_CHECKOUT_URL,
+    enterprise: process.env.PAYSTACK_ENTERPRISE_CHECKOUT_URL,
+    custom: process.env.PAYSTACK_CUSTOM_CHECKOUT_URL,
+  };
+
+  return normalizeOptionalString(envMap[planKey]);
+}
+
 export function getAdminBillingPlans(): AdminBillingPlan[] {
   return BILLING_PLANS.map((plan) => {
     const paystackPlanCode = getPaystackPlanCode(plan.key);
+    const paystackCheckoutUrl = getPaystackCheckoutUrl(plan.key);
 
     return {
       ...plan,
       paystackPlanCode,
-      isConfigured: Boolean(paystackPlanCode),
+      paystackCheckoutUrl,
+      isConfigured: Boolean(paystackPlanCode || paystackCheckoutUrl),
     };
   });
 }
@@ -206,6 +259,7 @@ export function createChurchBilling(options: {
   authorizationCode?: string;
   lastPaymentReference?: string;
   lastPaymentAt?: string;
+  entitlementOverrides?: ChurchBillingEntitlementOverrides;
 } = {}): ChurchBilling {
   const startedAt = options.startedAt ?? new Date().toISOString();
   const inferredPlanKey = options.planKey ?? inferPlanKeyFromChurchSize(options.size ?? "small");
@@ -235,6 +289,7 @@ export function createChurchBilling(options: {
     authorizationCode: normalizeOptionalString(options.authorizationCode),
     lastPaymentReference: normalizeOptionalString(options.lastPaymentReference),
     lastPaymentAt: normalizeOptionalString(options.lastPaymentAt),
+    entitlementOverrides: normalizeEntitlementOverrides(options.entitlementOverrides),
   };
 }
 
@@ -279,6 +334,7 @@ export function ensureChurchBilling(
     authorizationCode: normalizeOptionalString(existingBilling?.authorizationCode),
     lastPaymentReference: normalizeOptionalString(existingBilling?.lastPaymentReference),
     lastPaymentAt: normalizeOptionalString(existingBilling?.lastPaymentAt),
+    entitlementOverrides: normalizeEntitlementOverrides(existingBilling?.entitlementOverrides),
   };
 }
 
@@ -296,6 +352,7 @@ export function mergeChurchBilling(
       currency: plan.currency,
       interval: plan.interval,
       planCode: existingBilling.planCode ?? getPaystackPlanCode(plan.key),
+      entitlementOverrides: normalizeEntitlementOverrides(existingBilling.entitlementOverrides),
     };
   }
 
@@ -342,6 +399,9 @@ export function mergeChurchBilling(
     lastPaymentAt:
       normalizeOptionalString(update.lastPaymentAt) ??
       existingBilling.lastPaymentAt,
+    entitlementOverrides: Object.prototype.hasOwnProperty.call(update, "entitlementOverrides")
+      ? normalizeEntitlementOverrides(update.entitlementOverrides)
+      : normalizeEntitlementOverrides(existingBilling.entitlementOverrides),
   };
 }
 
@@ -419,8 +479,19 @@ export async function createPaystackCheckoutSession(options: {
   cancelAction?: string;
 }): Promise<PaystackCheckoutResponse> {
   const plan = getBillingPlan(options.request.planKey);
+  const paystackCheckoutUrl = getPaystackCheckoutUrl(plan.key);
+
+  if (paystackCheckoutUrl) {
+    return {
+      authorizationUrl: paystackCheckoutUrl,
+    };
+  }
+
   const amount = getPlanAmount(plan, options.church.billing.amount);
-  const paystackPlanCode = getPaystackPlanCode(plan.key);
+  const paystackPlanCode =
+    options.church.billing.planKey === plan.key
+      ? normalizeOptionalString(options.church.billing.planCode) ?? getPaystackPlanCode(plan.key)
+      : getPaystackPlanCode(plan.key);
 
   if (!paystackPlanCode) {
     throw new Error(`No Paystack plan code configured for the ${plan.name} plan`);

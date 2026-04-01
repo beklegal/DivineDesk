@@ -8,6 +8,7 @@ import type {
   UpdateChurchBillingRequest,
 } from "../../shared/api.js";
 import {
+  isSelfServeBillingPlanKey,
   SUBSCRIPTION_PAYMENT_METHODS,
 } from "../../shared/api.js";
 import {
@@ -331,7 +332,7 @@ function buildBillingUpdateFromPayload(
       getNestedString(payload, "data", "paid_at") ??
       getNestedString(payload, "data", "transaction_date") ??
       church.billing.lastPaymentAt,
-    amount: plan.key === "custom" ? church.billing.amount || plan.amount : plan.amount,
+    amount: plan.key === church.billing.planKey ? church.billing.amount || plan.amount : plan.amount,
   };
 }
 
@@ -464,6 +465,20 @@ export const handleCreateAdminPaystackCheckout: RequestHandler = async (req: any
       return;
     }
 
+    const planKey = normalizePlanKey(request.planKey);
+    if (!planKey) {
+      res.status(400).json({ success: false, error: "Invalid billing plan selected" });
+      return;
+    }
+    if (!isSelfServeBillingPlanKey(planKey)) {
+      res.status(400).json({
+        success: false,
+        error:
+          "Custom plans are handled manually. Save the quoted amount and record payment from the admin dashboard instead.",
+      });
+      return;
+    }
+
     const database = await readDatabase();
     const church = database.churches.find((candidate) => candidate.id === churchId);
 
@@ -472,8 +487,12 @@ export const handleCreateAdminPaystackCheckout: RequestHandler = async (req: any
       return;
     }
 
+    const billing = ensureChurchBilling(church);
     const checkout = await createPaystackCheckoutSession({
-      church,
+      church: {
+        ...church,
+        billing,
+      },
       request,
       source: "divinedesk_admin",
     });
@@ -485,11 +504,13 @@ export const handleCreateAdminPaystackCheckout: RequestHandler = async (req: any
         return;
       }
 
-      targetChurch.billing = mergeChurchBilling(ensureChurchBilling(targetChurch), {
-        planKey: request.planKey,
+      const existingBilling = ensureChurchBilling(targetChurch);
+      const planChanged = existingBilling.planKey !== planKey;
+      targetChurch.billing = mergeChurchBilling(existingBilling, {
+        planKey,
         billingEmail: request.billingEmail,
-        planCode: getPaystackPlanCode(request.planKey),
-        lastPaymentReference: checkout.reference,
+        ...(planChanged ? { planCode: getPaystackPlanCode(planKey) } : {}),
+        ...(checkout.reference ? { lastPaymentReference: checkout.reference } : {}),
       });
     });
 
@@ -597,6 +618,14 @@ export const handleCreateChurchPaystackCheckout: RequestHandler = async (req: an
     }
 
     const planKey = normalizePlanKey(request.planKey) ?? billing.planKey;
+    if (!isSelfServeBillingPlanKey(planKey)) {
+      res.status(400).json({
+        success: false,
+        error:
+          "This workspace is on a custom quoted plan. Contact the platform team or your system admin to complete billing.",
+      });
+      return;
+    }
     const billingEmail =
       toOptionalString(request.billingEmail) ??
       billing.billingEmail ??
@@ -626,11 +655,13 @@ export const handleCreateChurchPaystackCheckout: RequestHandler = async (req: an
         return;
       }
 
-      targetChurch.billing = mergeChurchBilling(ensureChurchBilling(targetChurch), {
+      const existingBilling = ensureChurchBilling(targetChurch);
+      const planChanged = existingBilling.planKey !== planKey;
+      targetChurch.billing = mergeChurchBilling(existingBilling, {
         planKey,
         billingEmail,
-        planCode: getPaystackPlanCode(planKey),
-        lastPaymentReference: checkout.reference,
+        ...(planChanged ? { planCode: getPaystackPlanCode(planKey) } : {}),
+        ...(checkout.reference ? { lastPaymentReference: checkout.reference } : {}),
       });
     });
 

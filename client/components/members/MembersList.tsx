@@ -10,9 +10,16 @@ interface MembersListProps {
   onRefresh: () => void;
   refreshTrigger?: number;
   branches: ChurchBranch[];
+  memberLimit: number | null;
 }
 
-export function MembersList({ onAddNew, onRefresh, refreshTrigger, branches }: MembersListProps) {
+export function MembersList({
+  onAddNew,
+  onRefresh,
+  refreshTrigger,
+  branches,
+  memberLimit,
+}: MembersListProps) {
   const [members, setMembers] = useState<Member[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -50,9 +57,20 @@ export function MembersList({ onAddNew, onRefresh, refreshTrigger, branches }: M
   );
   const showBranchColumn = branches.length > 1;
   const branchMap = new Map(branches.map((branch) => [branch.id, branch.name]));
+  const hasMemberLimit = memberLimit !== null;
+  const hasReachedMemberLimit = hasMemberLimit && members.length >= memberLimit;
+  const remainingMemberSlots = hasMemberLimit ? Math.max(memberLimit - members.length, 0) : null;
 
   return (
     <div className="space-y-4">
+      {hasMemberLimit ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
+          {hasReachedMemberLimit
+            ? `This plan is capped at ${memberLimit} members. Upgrade the church subscription to add more people.`
+            : `${members.length} of ${memberLimit} member slots are in use. ${remainingMemberSlots} slot${remainingMemberSlots === 1 ? "" : "s"} remaining on this tier.`}
+        </div>
+      ) : null}
+
       {/* Search and Actions */}
       <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
         <div className="flex-1 relative">
@@ -66,6 +84,7 @@ export function MembersList({ onAddNew, onRefresh, refreshTrigger, branches }: M
         </div>
         <Button
           onClick={onAddNew}
+          disabled={hasReachedMemberLimit}
           className="bg-primary hover:bg-primary/90 text-white h-11"
         >
           <Plus className="w-4 h-4 mr-2" />

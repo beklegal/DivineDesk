@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import {
+  findBillingPlan,
   formatBillingDate,
   formatSubscriptionAmount,
   formatSubscriptionStatusLabel,
@@ -29,8 +30,10 @@ export default function Subscription() {
 
   const reference =
     searchParams.get("reference")?.trim() || church?.billing.lastPaymentReference || "";
+  const billingPlan = church ? findBillingPlan(church.billing.planKey) : null;
   const canMakePayment =
     church?.status === "active" && church?.billing.status !== "suspended";
+  const canSelfServeCheckout = Boolean(billingPlan?.selfServeEnabled);
 
   const handleLogout = () => {
     logout();
@@ -103,6 +106,12 @@ export default function Subscription() {
 
   const handleLaunchCheckout = async () => {
     if (!token || !church) {
+      return;
+    }
+    if (!canSelfServeCheckout) {
+      setError(
+        "This workspace is on a custom quoted plan. Contact the platform team or your system admin to complete billing.",
+      );
       return;
     }
 
@@ -227,8 +236,9 @@ export default function Subscription() {
           <div className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
             <h2 className="text-2xl font-semibold text-slate-950">Payment prompt</h2>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              New churches receive one month free. After that, the workspace locks on the due date
-              until the monthly {formatSubscriptionAmount(church.billing.amount)} payment is made.
+              {canSelfServeCheckout
+                ? `New churches receive one month free. After that, the workspace locks on the due date until the monthly ${formatSubscriptionAmount(church.billing.amount)} payment is made.`
+                : `This workspace is on a custom quoted plan managed by the platform team. Refresh the billing status after payment is recorded, or contact the team if you need an updated invoice.`}
             </p>
 
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -247,6 +257,7 @@ export default function Subscription() {
             </div>
 
             {canMakePayment ? (
+              canSelfServeCheckout ? (
               <div className="mt-8 flex flex-wrap gap-3">
                 <Button
                   onClick={() => void handleLaunchCheckout()}
@@ -289,6 +300,29 @@ export default function Subscription() {
                   Refresh status
                 </Button>
               </div>
+              ) : (
+                <div className="mt-8 space-y-4">
+                  <div className="rounded-[28px] border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-700">
+                    Custom plans are billed manually. Contact the platform team or your church
+                    administrator to confirm payment, then refresh this page to unlock the
+                    workspace.
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void handleRefresh()}
+                    disabled={isRefreshing}
+                    className="h-12 rounded-2xl border-slate-300 bg-white"
+                  >
+                    {isRefreshing ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCcw className="mr-2 h-4 w-4" />
+                    )}
+                    Refresh status
+                  </Button>
+                </div>
+              )
             ) : (
               <div className="mt-8 rounded-[28px] border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-700">
                 This workspace was suspended by the system administrator. Contact the platform team
@@ -307,9 +341,19 @@ export default function Subscription() {
             <div className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
               <p className="text-xs uppercase tracking-[0.24em] text-slate-400">What happens next</p>
               <div className="mt-5 space-y-4 text-sm leading-6 text-slate-600">
-                <p>1. Open the Paystack payment link and complete the charge.</p>
-                <p>2. Return here and verify the payment if the dashboard does not unlock automatically.</p>
-                <p>3. As soon as the payment is confirmed, you will be redirected back into the workspace.</p>
+                {canSelfServeCheckout ? (
+                  <>
+                    <p>1. Open the Paystack payment link and complete the charge.</p>
+                    <p>2. Return here and verify the payment if the dashboard does not unlock automatically.</p>
+                    <p>3. As soon as the payment is confirmed, you will be redirected back into the workspace.</p>
+                  </>
+                ) : (
+                  <>
+                    <p>1. Confirm the quoted payment with the platform team or your system admin.</p>
+                    <p>2. Once they record the payment, refresh this page to pull the latest billing status.</p>
+                    <p>3. As soon as the payment is confirmed, the workspace will unlock again.</p>
+                  </>
+                )}
               </div>
             </div>
 

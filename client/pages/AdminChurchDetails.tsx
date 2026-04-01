@@ -8,22 +8,33 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
-import { formatSubscriptionAmount } from "@/lib/billing";
+import { formatSubscriptionAmount, getBillingPlanSummary } from "@/lib/billing";
 import { formatAdminCurrency } from "@/lib/currency";
-import { AdminBillingPlan, BILLING_PLANS, Church, ChurchSize, ChurchStatus, ChurchSubscriptionPaymentRecord, CreateChurchSubscriptionPaymentRecordRequest, SubscriptionPaymentMethod, SubscriptionPlanKey, SubscriptionStatus, UpdateChurchRequest } from "@shared/api";
+import { AdminBillingPlan, BILLING_PLAN_FEATURES, BILLING_PLANS, BILLING_REPORT_ACCESS_LEVELS, type BillingPlanFeature, type BillingReportAccessLevel, Church, type ChurchBillingEntitlementOverrides, ChurchSize, ChurchStatus, ChurchSubscriptionPaymentRecord, CreateChurchSubscriptionPaymentRecordRequest, getEffectiveBillingEntitlements, SubscriptionPaymentMethod, SubscriptionPlanKey, SubscriptionStatus, UpdateChurchRequest } from "@shared/api";
+
+type FeatureOverrideState = "plan_default" | "enabled" | "disabled";
 
 type ChurchFormState = {
   name: string; size: ChurchSize; status: ChurchStatus; adminName: string; adminEmail: string;
   email: string; phone: string; address: string; website: string; billingPlanKey: SubscriptionPlanKey;
   billingStatus: SubscriptionStatus; billingAmount: string; billingEmail: string; renewalDate: string;
   trialEndsAt: string; customerCode: string; subscriptionCode: string; planCode: string; lastPaymentReference: string;
+  billingReportAccessOverride: "plan_default" | BillingReportAccessLevel;
+  billingMemberLimitMode: "plan_default" | "unlimited" | "custom";
+  billingMemberLimitOverride: string;
+  billingFeatureOverrides: Record<BillingPlanFeature, FeatureOverrideState>;
 };
 
 type PaymentFormState = {
   amount: string; paidAt: string; method: SubscriptionPaymentMethod; reference: string; notes: string;
 };
 
-const fallbackBillingPlans: AdminBillingPlan[] = BILLING_PLANS.map((plan) => ({ ...plan, paystackPlanCode: undefined, isConfigured: false }));
+const fallbackBillingPlans: AdminBillingPlan[] = BILLING_PLANS.map((plan) => ({
+  ...plan,
+  paystackPlanCode: undefined,
+  paystackCheckoutUrl: undefined,
+  isConfigured: false,
+}));
 const manualPaymentMethods: Array<{ value: SubscriptionPaymentMethod; label: string }> = [
   { value: "bank_transfer", label: "Bank transfer" },
   { value: "mobile_money", label: "Mobile money" },
@@ -32,7 +43,32 @@ const manualPaymentMethods: Array<{ value: SubscriptionPaymentMethod; label: str
 ];
 const workspaceStatusStyles = { active: "bg-green-100 text-green-700", inactive: "bg-slate-100 text-slate-700", suspended: "bg-red-100 text-red-700" } as const;
 const billingStatusStyles = { active: "bg-emerald-100 text-emerald-700", trialing: "bg-blue-100 text-blue-700", past_due: "bg-amber-100 text-amber-700", canceled: "bg-rose-100 text-rose-700", suspended: "bg-red-100 text-red-700" } as const;
-const emptyFormState: ChurchFormState = { name: "", size: "small", status: "active", adminName: "", adminEmail: "", email: "", phone: "", address: "", website: "", billingPlanKey: "starter", billingStatus: "trialing", billingAmount: "", billingEmail: "", renewalDate: "", trialEndsAt: "", customerCode: "", subscriptionCode: "", planCode: "", lastPaymentReference: "" };
+const billingFeatureDetails: Array<{ key: BillingPlanFeature; label: string; description: string }> = [
+  { key: "giving", label: "Giving and donation tracking", description: "Unlock giving pages, donation records, and finance exports." },
+  { key: "delegated_access", label: "Delegated branch admins", description: "Allow the church to create branch-level admin accounts." },
+  { key: "multi_branch_management", label: "Multi-branch management", description: "Allow creating and managing multiple branch records." },
+  { key: "priority_support", label: "Priority support", description: "Flag the church for higher-touch support and onboarding." },
+  { key: "integrations", label: "Integrations", description: "Mark the church as approved for custom integrations or connected services." },
+];
+const reportAccessLabels: Record<BillingReportAccessLevel, string> = {
+  basic: "Basic",
+  advanced: "Advanced",
+  full: "Full",
+};
+function createDefaultFeatureOverrideState(): Record<BillingPlanFeature, FeatureOverrideState> {
+  return BILLING_PLAN_FEATURES.reduce((state, feature) => ({ ...state, [feature]: "plan_default" }), {} as Record<BillingPlanFeature, FeatureOverrideState>);
+}
+function toFeatureOverrideState(overrides?: ChurchBillingEntitlementOverrides): Record<BillingPlanFeature, FeatureOverrideState> {
+  const state = createDefaultFeatureOverrideState();
+  overrides?.enabledFeatures?.forEach((feature) => {
+    state[feature] = "enabled";
+  });
+  overrides?.disabledFeatures?.forEach((feature) => {
+    state[feature] = "disabled";
+  });
+  return state;
+}
+const emptyFormState: ChurchFormState = { name: "", size: "small", status: "active", adminName: "", adminEmail: "", email: "", phone: "", address: "", website: "", billingPlanKey: "starter", billingStatus: "trialing", billingAmount: "", billingEmail: "", renewalDate: "", trialEndsAt: "", customerCode: "", subscriptionCode: "", planCode: "", lastPaymentReference: "", billingReportAccessOverride: "plan_default", billingMemberLimitMode: "plan_default", billingMemberLimitOverride: "", billingFeatureOverrides: createDefaultFeatureOverrideState() };
 
 function toInputDate(value?: string) { return !value ? "" : value.includes("T") ? value.split("T")[0] : value; }
 function formatDate(value?: string) { return value ? new Date(value).toLocaleDateString() : "Pending"; }
@@ -43,17 +79,50 @@ function formatPaymentMethod(value: SubscriptionPaymentMethod) { return value ==
 function formatPaymentSource(value: ChurchSubscriptionPaymentRecord["source"]) { return value === "manual" ? "Manual" : value === "paystack_verify" ? "Paystack verify" : "Paystack webhook"; }
 
 function toFormState(church: Church): ChurchFormState {
+  const overrides = church.billing.entitlementOverrides;
+  const memberLimitMode =
+    overrides && Object.prototype.hasOwnProperty.call(overrides, "memberLimit")
+      ? overrides.memberLimit === null
+        ? "unlimited"
+        : "custom"
+      : "plan_default";
+
   return {
     name: church.name, size: church.size, status: church.status ?? "active", adminName: church.adminName ?? "", adminEmail: church.adminEmail ?? "", email: church.email ?? "", phone: church.phone ?? "", address: church.address ?? "", website: church.website ?? "",
     billingPlanKey: church.billing.planKey, billingStatus: church.billing.status, billingAmount: String(church.billing.amount ?? ""), billingEmail: church.billing.billingEmail ?? "", renewalDate: toInputDate(church.billing.renewalDate), trialEndsAt: toInputDate(church.billing.trialEndsAt), customerCode: church.billing.customerCode ?? "", subscriptionCode: church.billing.subscriptionCode ?? "", planCode: church.billing.planCode ?? "", lastPaymentReference: church.billing.lastPaymentReference ?? "",
+    billingReportAccessOverride: overrides?.reportAccess ?? "plan_default",
+    billingMemberLimitMode: memberLimitMode,
+    billingMemberLimitOverride: typeof overrides?.memberLimit === "number" ? String(overrides.memberLimit) : "",
+    billingFeatureOverrides: toFeatureOverrideState(overrides),
   };
+}
+
+function toEntitlementOverrides(
+  formData: ChurchFormState,
+): ChurchBillingEntitlementOverrides | null {
+  const memberLimitOverride = Number(formData.billingMemberLimitOverride);
+  const enabledFeatures = BILLING_PLAN_FEATURES.filter((feature) => formData.billingFeatureOverrides[feature] === "enabled");
+  const disabledFeatures = BILLING_PLAN_FEATURES.filter((feature) => formData.billingFeatureOverrides[feature] === "disabled");
+  const entitlementOverrides: ChurchBillingEntitlementOverrides = {
+    ...(formData.billingReportAccessOverride !== "plan_default" ? { reportAccess: formData.billingReportAccessOverride } : {}),
+    ...(formData.billingMemberLimitMode === "unlimited"
+      ? { memberLimit: null }
+      : formData.billingMemberLimitMode === "custom" && Number.isInteger(memberLimitOverride) && memberLimitOverride > 0
+        ? { memberLimit: memberLimitOverride }
+        : {}),
+    ...(enabledFeatures.length ? { enabledFeatures } : {}),
+    ...(disabledFeatures.length ? { disabledFeatures } : {}),
+  };
+
+  return Object.keys(entitlementOverrides).length > 0 ? entitlementOverrides : null;
 }
 
 function toPayload(formData: ChurchFormState): UpdateChurchRequest {
   const amount = Number(formData.billingAmount);
+
   return {
     name: formData.name, size: formData.size, status: formData.status, adminName: formData.adminName, adminEmail: formData.adminEmail, email: formData.email, phone: formData.phone, address: formData.address, website: formData.website,
-    billing: { planKey: formData.billingPlanKey, status: formData.billingStatus, amount: Number.isFinite(amount) && amount > 0 ? amount : undefined, billingEmail: formData.billingEmail || undefined, renewalDate: formData.renewalDate || undefined, trialEndsAt: formData.trialEndsAt || undefined, customerCode: formData.customerCode || undefined, subscriptionCode: formData.subscriptionCode || undefined, planCode: formData.planCode || undefined, lastPaymentReference: formData.lastPaymentReference || undefined },
+    billing: { planKey: formData.billingPlanKey, status: formData.billingStatus, amount: Number.isFinite(amount) && amount > 0 ? amount : undefined, billingEmail: formData.billingEmail || undefined, renewalDate: formData.renewalDate || undefined, trialEndsAt: formData.trialEndsAt || undefined, customerCode: formData.customerCode || undefined, subscriptionCode: formData.subscriptionCode || undefined, planCode: formData.planCode || undefined, lastPaymentReference: formData.lastPaymentReference || undefined, entitlementOverrides: toEntitlementOverrides(formData) },
   };
 }
 
@@ -76,9 +145,28 @@ export default function AdminChurchDetails() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const selectedPlan = useMemo(() => billingPlans.find((plan) => plan.key === formData.billingPlanKey), [billingPlans, formData.billingPlanKey]);
+  const pendingEntitlementOverrides = useMemo(() => toEntitlementOverrides(formData), [formData]);
+  const effectiveEntitlements = useMemo(() => getEffectiveBillingEntitlements({
+    planKey: formData.billingPlanKey,
+    entitlementOverrides: pendingEntitlementOverrides ?? undefined,
+  }), [formData.billingPlanKey, pendingEntitlementOverrides]);
+  const canLaunchCheckout = Boolean(selectedPlan?.selfServeEnabled && selectedPlan?.isConfigured);
+  const needsCheckoutConfig = Boolean(selectedPlan?.selfServeEnabled && !selectedPlan?.isConfigured);
+  const isManualCustomPlan = Boolean(selectedPlan && !selectedPlan.selfServeEnabled);
 
   const applyChurch = (nextChurch: Church) => { setChurch(nextChurch); setFormData(toFormState(nextChurch)); };
   const setField = (field: keyof ChurchFormState, value: string) => { setFormData((current) => ({ ...current, [field]: value })); if (error) setError(""); if (success) setSuccess(""); };
+  const setFeatureOverride = (feature: BillingPlanFeature, value: FeatureOverrideState) => {
+    setFormData((current) => ({
+      ...current,
+      billingFeatureOverrides: {
+        ...current.billingFeatureOverrides,
+        [feature]: value,
+      },
+    }));
+    if (error) setError("");
+    if (success) setSuccess("");
+  };
 
   const loadChurch = async () => {
     if (!token || !churchId) return;
@@ -110,6 +198,13 @@ export default function AdminChurchDetails() {
   const handleSave = async (event?: React.FormEvent) => {
     event?.preventDefault();
     if (!token || !churchId) return;
+    if (
+      formData.billingMemberLimitMode === "custom" &&
+      (!Number.isInteger(Number(formData.billingMemberLimitOverride)) || Number(formData.billingMemberLimitOverride) <= 0)
+    ) {
+      setError("Custom member limit overrides must be whole numbers greater than zero.");
+      return;
+    }
     setIsSaving(true); setError(""); setSuccess("");
     try {
       const response = await fetch(`/api/admin/churches/${churchId}`, { method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(toPayload(formData)) });
@@ -126,6 +221,10 @@ export default function AdminChurchDetails() {
 
   const handleLaunchCheckout = async () => {
     if (!token || !churchId) return;
+    if (isManualCustomPlan) {
+      setError("Custom plans are handled manually. Save the quoted amount and record payment below instead of launching checkout.");
+      return;
+    }
     setIsStartingCheckout(true); setError(""); setSuccess("");
     try {
       const response = await fetch(`/api/admin/churches/${churchId}/billing/checkout`, {
@@ -135,8 +234,14 @@ export default function AdminChurchDetails() {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Failed to launch checkout");
-      setField("lastPaymentReference", payload.data.reference);
-      setSuccess("Paystack checkout opened in a new tab.");
+      if (payload.data.reference) {
+        setField("lastPaymentReference", payload.data.reference);
+      }
+      setSuccess(
+        payload.data.reference
+          ? "Paystack checkout opened in a new tab."
+          : "Hosted Paystack checkout opened in a new tab.",
+      );
       window.open(payload.data.authorizationUrl, "_blank", "noopener,noreferrer");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Failed to launch checkout");
@@ -261,7 +366,7 @@ export default function AdminChurchDetails() {
               <div className="mt-10 border-t border-slate-200 pt-8">
                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-400">Paystack billing</p>
                 <div className="mt-6 grid gap-5 md:grid-cols-2">
-                  <div className="space-y-2"><Label>Plan</Label><Select value={formData.billingPlanKey} onValueChange={(value: SubscriptionPlanKey) => setField("billingPlanKey", value)}><SelectTrigger className="h-11 rounded-2xl"><SelectValue /></SelectTrigger><SelectContent>{billingPlans.map((plan) => <SelectItem key={plan.key} value={plan.key}>{plan.name} - {formatSubscriptionAmount(plan.amount)}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="space-y-2"><Label>Plan</Label><Select value={formData.billingPlanKey} onValueChange={(value: SubscriptionPlanKey) => setField("billingPlanKey", value)}><SelectTrigger className="h-11 rounded-2xl"><SelectValue /></SelectTrigger><SelectContent>{billingPlans.map((plan) => <SelectItem key={plan.key} value={plan.key}>{getBillingPlanSummary(plan)}</SelectItem>)}</SelectContent></Select></div>
                   <div className="space-y-2"><Label>Billing status</Label><Select value={formData.billingStatus} onValueChange={(value: SubscriptionStatus) => setField("billingStatus", value)}><SelectTrigger className="h-11 rounded-2xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="trialing">Trialing</SelectItem><SelectItem value="active">Active</SelectItem><SelectItem value="past_due">Past due</SelectItem><SelectItem value="canceled">Canceled</SelectItem><SelectItem value="suspended">Suspended</SelectItem></SelectContent></Select></div>
                   <div className="space-y-2"><Label>Amount (USD)</Label><Input type="number" min="0" value={formData.billingAmount} onChange={(event) => setField("billingAmount", event.target.value)} className="h-11 rounded-2xl" /></div>
                   <div className="space-y-2"><Label>Billing email</Label><Input type="email" value={formData.billingEmail} onChange={(event) => setField("billingEmail", event.target.value)} className="h-11 rounded-2xl" /></div>
@@ -272,10 +377,85 @@ export default function AdminChurchDetails() {
                   <div className="space-y-2"><Label>Plan code</Label><Input value={formData.planCode} onChange={(event) => setField("planCode", event.target.value)} className="h-11 rounded-2xl" /></div>
                   <div className="space-y-2"><Label>Last payment reference</Label><Input value={formData.lastPaymentReference} onChange={(event) => setField("lastPaymentReference", event.target.value)} className="h-11 rounded-2xl" /></div>
                 </div>
-                {!selectedPlan?.isConfigured ? <div className="mt-5 rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">Configure the matching `PAYSTACK_*_PLAN_CODE` before launching checkout.</div> : null}
+                {selectedPlan ? <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600"><p className="font-medium text-slate-900">{selectedPlan.targetProfile}</p><p className="mt-1">{selectedPlan.description}</p></div> : null}
+                <div className="mt-5 rounded-[32px] border border-slate-200 bg-slate-50/70 p-5">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-400">Entitlement overrides</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">Super admins can grant extra access, remove plan access, or customize limits for this specific church without changing the package for everyone else.</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
+                      Plan: {selectedPlan?.name ?? formData.billingPlanKey}
+                    </div>
+                  </div>
+
+                  <div className="mt-6 grid gap-5 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Report access override</Label>
+                      <Select value={formData.billingReportAccessOverride} onValueChange={(value: "plan_default" | BillingReportAccessLevel) => setField("billingReportAccessOverride", value)}>
+                        <SelectTrigger className="h-11 rounded-2xl"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="plan_default">Plan default ({selectedPlan ? reportAccessLabels[selectedPlan.reportAccess] : "Basic"})</SelectItem>
+                          {BILLING_REPORT_ACCESS_LEVELS.map((accessLevel) => (
+                            <SelectItem key={accessLevel} value={accessLevel}>{reportAccessLabels[accessLevel]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Member limit override</Label>
+                      <Select value={formData.billingMemberLimitMode} onValueChange={(value: "plan_default" | "unlimited" | "custom") => setField("billingMemberLimitMode", value)}>
+                        <SelectTrigger className="h-11 rounded-2xl"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="plan_default">Plan default ({selectedPlan?.memberLimit === null ? "Unlimited" : selectedPlan?.memberLimit ?? 0} members)</SelectItem>
+                          <SelectItem value="unlimited">Unlimited</SelectItem>
+                          <SelectItem value="custom">Custom cap</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {formData.billingMemberLimitMode === "custom" ? (
+                      <div className="space-y-2 md:col-span-2">
+                        <Label>Custom member limit</Label>
+                        <Input type="number" min="1" step="1" value={formData.billingMemberLimitOverride} onChange={(event) => setField("billingMemberLimitOverride", event.target.value)} className="h-11 rounded-2xl" />
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-6 grid gap-4 md:grid-cols-2">
+                    {billingFeatureDetails.map((feature) => (
+                      <div key={feature.key} className="rounded-3xl border border-slate-200 bg-white px-4 py-4">
+                        <p className="font-medium text-slate-900">{feature.label}</p>
+                        <p className="mt-1 text-sm leading-6 text-slate-500">{feature.description}</p>
+                        <div className="mt-4">
+                          <Select value={formData.billingFeatureOverrides[feature.key]} onValueChange={(value: FeatureOverrideState) => setFeatureOverride(feature.key, value)}>
+                            <SelectTrigger className="h-11 rounded-2xl"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="plan_default">Plan default</SelectItem>
+                              <SelectItem value="enabled">Force on</SelectItem>
+                              <SelectItem value="disabled">Force off</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-6 rounded-3xl border border-slate-200 bg-white px-4 py-4 text-sm text-slate-600">
+                    <p className="font-medium text-slate-900">Effective access after save</p>
+                    <div className="mt-3 space-y-2">
+                      <div className="flex items-center justify-between gap-4"><span>Report access</span><span className="font-medium text-slate-900">{reportAccessLabels[effectiveEntitlements.reportAccess]}</span></div>
+                      <div className="flex items-center justify-between gap-4"><span>Member limit</span><span className="font-medium text-slate-900">{effectiveEntitlements.memberLimit === null ? "Unlimited" : effectiveEntitlements.memberLimit.toString()}</span></div>
+                      <div className="flex items-start justify-between gap-4"><span>Enabled features</span><span className="max-w-[60%] text-right font-medium text-slate-900">{effectiveEntitlements.features.length > 0 ? effectiveEntitlements.features.map((feature) => billingFeatureDetails.find((item) => item.key === feature)?.label ?? feature).join(", ") : "Plan default only"}</span></div>
+                    </div>
+                  </div>
+                </div>
+                {isManualCustomPlan ? <div className="mt-5 rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">Custom plans are quoted manually. Set the agreed amount above, then record payment below or restore access after payment clears.</div> : null}
+                {needsCheckoutConfig ? <div className="mt-5 rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">Configure the matching `PAYSTACK_STARTER_CHECKOUT_URL`, `PAYSTACK_GROWTH_CHECKOUT_URL`, or `PAYSTACK_ENTERPRISE_CHECKOUT_URL` before launching checkout. Plan codes still work as a fallback if you prefer the API-driven flow.</div> : null}
                 <div className="mt-8 flex flex-wrap gap-3">
                   <Button type="submit" disabled={isSaving} className="h-11 rounded-2xl bg-slate-950 text-white hover:bg-slate-800">{isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Save changes</Button>
-                  <Button type="button" variant="outline" onClick={() => void handleLaunchCheckout()} disabled={isStartingCheckout || !selectedPlan?.isConfigured} className="h-11 rounded-2xl">{isStartingCheckout ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ExternalLink className="mr-2 h-4 w-4" />}Launch checkout</Button>
+                  <Button type="button" variant="outline" onClick={() => void handleLaunchCheckout()} disabled={isStartingCheckout || !canLaunchCheckout} className="h-11 rounded-2xl">{isStartingCheckout ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ExternalLink className="mr-2 h-4 w-4" />}Launch checkout</Button>
                   <Button type="button" variant="outline" onClick={() => void handleVerifyPayment()} disabled={isVerifyingPayment || !formData.lastPaymentReference} className="h-11 rounded-2xl">{isVerifyingPayment ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}Verify payment</Button>
                 </div>
                 <div className="mt-8 rounded-[28px] border border-slate-200 bg-slate-50 p-5">

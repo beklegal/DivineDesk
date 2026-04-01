@@ -4,12 +4,15 @@ import {
   CalendarDays,
   DollarSign,
   Loader2,
+  Sparkles,
   TrendingUp,
   UserPlus,
   Users,
 } from "lucide-react";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/contexts/AuthContext";
+import { churchHasBillingFeature, findBillingPlan } from "@/lib/billing";
 import { formatChurchCurrency } from "@/lib/currency";
 import {
   Card,
@@ -59,6 +62,7 @@ function TrendBars({
 }
 
 export default function DashboardContent() {
+  const { church } = useAuth();
   const { data, isLoading, error } = useDashboardData({ refetchInterval: 15000 });
 
   if (isLoading && !data) {
@@ -88,6 +92,8 @@ export default function DashboardContent() {
     );
   }
 
+  const hasGivingAccess = churchHasBillingFeature(church, "giving");
+  const currentPlan = church ? findBillingPlan(church.billing.planKey) : null;
   const latestGiving = data.recentDonations.reduce(
     (sum, donation) => sum + donation.amount,
     0,
@@ -115,14 +121,24 @@ export default function DashboardContent() {
 
         <Card className="rounded-[28px] border-slate-200 shadow-sm">
           <CardHeader className="pb-3">
-            <CardDescription className="text-slate-500">Recent giving</CardDescription>
+            <CardDescription className="text-slate-500">
+              {hasGivingAccess ? "Recent giving" : "Current plan"}
+            </CardDescription>
             <CardTitle className="flex items-center justify-between text-3xl text-slate-950">
-              {formatChurchCurrency(latestGiving, { compact: true })}
-              <DollarSign className="h-5 w-5 text-amber-500" />
+              {hasGivingAccess
+                ? formatChurchCurrency(latestGiving, { compact: true })
+                : currentPlan?.name ?? "Starter"}
+              {hasGivingAccess ? (
+                <DollarSign className="h-5 w-5 text-amber-500" />
+              ) : (
+                <Sparkles className="h-5 w-5 text-amber-500" />
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-slate-500">
-            Combined from the latest {data.recentDonations.length} donations.
+            {hasGivingAccess
+              ? `Combined from the latest ${data.recentDonations.length} donations.`
+              : "Upgrade to Growth to unlock giving and donation tracking."}
           </CardContent>
         </Card>
 
@@ -153,26 +169,28 @@ export default function DashboardContent() {
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card className="rounded-[32px] border-slate-200 shadow-sm">
-          <CardHeader>
-            <CardDescription className="text-slate-500">Giving trend</CardDescription>
-            <CardTitle className="flex items-center gap-3 text-slate-950">
-              <TrendingUp className="h-5 w-5 text-emerald-500" />
-              Monthly donations
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <TrendBars
-              items={data.donationTrend.map((item) => ({
-                date: item.date,
-                value: item.amount,
-              }))}
-              colorClassName="bg-emerald-500"
-              formatter={(value) => formatChurchCurrency(value, { compact: true })}
-            />
-          </CardContent>
-        </Card>
+      <div className={`grid gap-6 ${hasGivingAccess ? "xl:grid-cols-2" : "xl:grid-cols-1"}`}>
+        {hasGivingAccess ? (
+          <Card className="rounded-[32px] border-slate-200 shadow-sm">
+            <CardHeader>
+              <CardDescription className="text-slate-500">Giving trend</CardDescription>
+              <CardTitle className="flex items-center gap-3 text-slate-950">
+                <TrendingUp className="h-5 w-5 text-emerald-500" />
+                Monthly donations
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <TrendBars
+                items={data.donationTrend.map((item) => ({
+                  date: item.date,
+                  value: item.amount,
+                }))}
+                colorClassName="bg-emerald-500"
+                formatter={(value) => formatChurchCurrency(value, { compact: true })}
+              />
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card className="rounded-[32px] border-slate-200 shadow-sm">
           <CardHeader>
@@ -277,46 +295,48 @@ export default function DashboardContent() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-[32px] border-slate-200 shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <div>
-                <CardDescription className="text-slate-500">Stewardship</CardDescription>
-                <CardTitle className="text-slate-950">Recent donations</CardTitle>
-              </div>
-              <Link
-                to="/donations"
-                className="inline-flex items-center text-sm font-medium text-slate-600 transition hover:text-slate-950"
-              >
-                Open giving
-                <ArrowRight className="ml-1 h-4 w-4" />
-              </Link>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {data.recentDonations.length === 0 ? (
-                <p className="text-sm text-slate-500">No donations recorded yet.</p>
-              ) : (
-                data.recentDonations.map((donation) => (
-                  <div
-                    key={donation.id}
-                    className="flex items-center justify-between gap-4 rounded-3xl border border-slate-100 bg-slate-50 px-4 py-4"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-slate-950">{donation.memberName}</p>
-                      <p className="text-sm capitalize text-slate-500">
-                        {donation.type.replace(/_/g, " ")}
-                      </p>
+          {hasGivingAccess ? (
+            <Card className="rounded-[32px] border-slate-200 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <div>
+                  <CardDescription className="text-slate-500">Stewardship</CardDescription>
+                  <CardTitle className="text-slate-950">Recent donations</CardTitle>
+                </div>
+                <Link
+                  to="/donations"
+                  className="inline-flex items-center text-sm font-medium text-slate-600 transition hover:text-slate-950"
+                >
+                  Open giving
+                  <ArrowRight className="ml-1 h-4 w-4" />
+                </Link>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {data.recentDonations.length === 0 ? (
+                  <p className="text-sm text-slate-500">No donations recorded yet.</p>
+                ) : (
+                  data.recentDonations.map((donation) => (
+                    <div
+                      key={donation.id}
+                      className="flex items-center justify-between gap-4 rounded-3xl border border-slate-100 bg-slate-50 px-4 py-4"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-slate-950">{donation.memberName}</p>
+                        <p className="text-sm capitalize text-slate-500">
+                          {donation.type.replace(/_/g, " ")}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-slate-950">
+                          {formatChurchCurrency(donation.amount)}
+                        </p>
+                        <p className="text-xs text-slate-400">{formatDate(donation.date)}</p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-slate-950">
-                        {formatChurchCurrency(donation.amount)}
-                      </p>
-                      <p className="text-xs text-slate-400">{formatDate(donation.date)}</p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
       </div>
     </div>

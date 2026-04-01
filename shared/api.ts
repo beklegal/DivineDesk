@@ -45,10 +45,23 @@ export type BillingInterval = (typeof BILLING_INTERVALS)[number];
 
 export const DEFAULT_BILLING_TRIAL_DAYS = 30;
 export const DEFAULT_MONTHLY_SUBSCRIPTION_AMOUNT = 10;
+export const GROWTH_MONTHLY_SUBSCRIPTION_AMOUNT = 25;
+export const ENTERPRISE_MONTHLY_SUBSCRIPTION_AMOUNT = 50;
+export const DEFAULT_CUSTOM_SUBSCRIPTION_AMOUNT = ENTERPRISE_MONTHLY_SUBSCRIPTION_AMOUNT;
 
 export const SUBSCRIPTION_PLAN_KEYS = ["starter", "growth", "enterprise", "custom"] as const;
 export type SubscriptionPlanKey = (typeof SUBSCRIPTION_PLAN_KEYS)[number];
 export type BillingCurrency = "USD" | "NGN";
+export const BILLING_REPORT_ACCESS_LEVELS = ["basic", "advanced", "full"] as const;
+export type BillingReportAccessLevel = (typeof BILLING_REPORT_ACCESS_LEVELS)[number];
+export const BILLING_PLAN_FEATURES = [
+  "giving",
+  "delegated_access",
+  "multi_branch_management",
+  "priority_support",
+  "integrations",
+] as const;
+export type BillingPlanFeature = (typeof BILLING_PLAN_FEATURES)[number];
 
 export const SUBSCRIPTION_STATUSES = [
   "trialing",
@@ -80,6 +93,19 @@ export const LOCKED_SUBSCRIPTION_STATUSES = [
   "suspended",
 ] as const;
 
+export interface ChurchBillingEntitlementOverrides {
+  memberLimit?: number | null;
+  reportAccess?: BillingReportAccessLevel;
+  enabledFeatures?: BillingPlanFeature[];
+  disabledFeatures?: BillingPlanFeature[];
+}
+
+export interface EffectiveBillingEntitlements {
+  memberLimit: number | null;
+  reportAccess: BillingReportAccessLevel;
+  features: BillingPlanFeature[];
+}
+
 export interface BillingPlan {
   key: SubscriptionPlanKey;
   name: string;
@@ -87,6 +113,13 @@ export interface BillingPlan {
   currency: BillingCurrency;
   interval: BillingInterval;
   description: string;
+  targetProfile: string;
+  highlights: string[];
+  publicPriceLabel: string;
+  selfServeEnabled: boolean;
+  memberLimit: number | null;
+  reportAccess: BillingReportAccessLevel;
+  features: BillingPlanFeature[];
 }
 
 export const BILLING_PLANS: BillingPlan[] = [
@@ -96,33 +129,178 @@ export const BILLING_PLANS: BillingPlan[] = [
     amount: DEFAULT_MONTHLY_SUBSCRIPTION_AMOUNT,
     currency: "USD",
     interval: "monthly",
-    description: "First month free, then $10/month for a clean church admin workspace.",
+    description: "Built for small churches that want a clean, dependable admin workspace.",
+    targetProfile: "For small churches",
+    highlights: [
+      "Up to 100 members",
+      "Basic member management and attendance tracking",
+      "Simple reporting for weekly admin work",
+    ],
+    publicPriceLabel: "$10/month",
+    selfServeEnabled: true,
+    memberLimit: 100,
+    reportAccess: "basic",
+    features: [],
   },
   {
     key: "growth",
     name: "Growth",
-    amount: DEFAULT_MONTHLY_SUBSCRIPTION_AMOUNT,
+    amount: GROWTH_MONTHLY_SUBSCRIPTION_AMOUNT,
     currency: "USD",
     interval: "monthly",
-    description: "First month free, then $10/month with room for branch-ready operations.",
+    description: "Built for growing churches that need stronger giving, event, and team workflows.",
+    targetProfile: "For growing churches",
+    highlights: [
+      "Up to 500 members",
+      "Giving, donations, and event management",
+      "Advanced reports and role-based access",
+    ],
+    publicPriceLabel: "$25/month",
+    selfServeEnabled: true,
+    memberLimit: 500,
+    reportAccess: "advanced",
+    features: ["giving", "delegated_access"],
   },
   {
     key: "enterprise",
     name: "Enterprise",
-    amount: DEFAULT_MONTHLY_SUBSCRIPTION_AMOUNT,
+    amount: ENTERPRISE_MONTHLY_SUBSCRIPTION_AMOUNT,
     currency: "USD",
     interval: "monthly",
-    description: "First month free, then $10/month for larger ministry coordination.",
+    description: "Built for large or multi-branch churches that need deeper visibility and support.",
+    targetProfile: "For big or multi-branch churches",
+    highlights: [
+      "Unlimited members",
+      "Multi-branch management and financial dashboards",
+      "Full analytics and priority support",
+    ],
+    publicPriceLabel: "$50/month",
+    selfServeEnabled: true,
+    memberLimit: null,
+    reportAccess: "full",
+    features: ["giving", "delegated_access", "multi_branch_management", "priority_support"],
   },
   {
     key: "custom",
     name: "Custom",
-    amount: DEFAULT_MONTHLY_SUBSCRIPTION_AMOUNT,
+    amount: DEFAULT_CUSTOM_SUBSCRIPTION_AMOUNT,
     currency: "USD",
     interval: "monthly",
-    description: "First month free, then a tailored plan that starts at $10/month.",
+    description: "Built for mega churches and ministry networks that need a tailored rollout.",
+    targetProfile: "For mega churches",
+    highlights: [
+      "Custom features and implementation planning",
+      "Dedicated support and guided onboarding",
+      "Integrations such as SMS, payments, and ministry workflows",
+    ],
+    publicPriceLabel: "Custom pricing",
+    selfServeEnabled: false,
+    memberLimit: null,
+    reportAccess: "full",
+    features: [
+      "giving",
+      "delegated_access",
+      "multi_branch_management",
+      "priority_support",
+      "integrations",
+    ],
   },
 ];
+
+export function getBillingPlanByKey(planKey?: SubscriptionPlanKey | null) {
+  return BILLING_PLANS.find((plan) => plan.key === planKey) ?? BILLING_PLANS[0];
+}
+
+export function getSelfServeBillingPlans() {
+  return BILLING_PLANS.filter((plan) => plan.selfServeEnabled);
+}
+
+export function getBillingPlanMemberLimit(planKey?: SubscriptionPlanKey | null) {
+  return getBillingPlanByKey(planKey).memberLimit;
+}
+
+function normalizeBillingFeatureList(features?: BillingPlanFeature[]) {
+  return Array.from(new Set(features ?? []));
+}
+
+export function hasBillingPlanFeature(
+  planKey: SubscriptionPlanKey | null | undefined,
+  feature: BillingPlanFeature,
+) {
+  return getBillingPlanByKey(planKey).features.includes(feature);
+}
+
+export function hasBillingPlanReportAccess(
+  planKey: SubscriptionPlanKey | null | undefined,
+  requiredAccess: BillingReportAccessLevel,
+) {
+  const reportAccessRank: Record<BillingReportAccessLevel, number> = {
+    basic: 0,
+    advanced: 1,
+    full: 2,
+  };
+
+  const plan = getBillingPlanByKey(planKey);
+  return reportAccessRank[plan.reportAccess] >= reportAccessRank[requiredAccess];
+}
+
+export function getEffectiveBillingEntitlements(
+  billing?: Pick<ChurchBilling, "planKey" | "entitlementOverrides"> | null,
+): EffectiveBillingEntitlements {
+  const plan = getBillingPlanByKey(billing?.planKey);
+  const overrides = billing?.entitlementOverrides;
+  const disabledFeatures = new Set(normalizeBillingFeatureList(overrides?.disabledFeatures));
+  const enabledFeatures = normalizeBillingFeatureList(overrides?.enabledFeatures).filter(
+    (feature) => !disabledFeatures.has(feature),
+  );
+  const hasMemberLimitOverride = Boolean(
+    overrides && Object.prototype.hasOwnProperty.call(overrides, "memberLimit"),
+  );
+
+  return {
+    memberLimit: hasMemberLimitOverride ? overrides?.memberLimit ?? null : plan.memberLimit,
+    reportAccess: overrides?.reportAccess ?? plan.reportAccess,
+    features: [
+      ...plan.features.filter((feature) => !disabledFeatures.has(feature)),
+      ...enabledFeatures.filter((feature) => !plan.features.includes(feature)),
+    ],
+  };
+}
+
+export function getEffectiveBillingMemberLimit(
+  billing?: Pick<ChurchBilling, "planKey" | "entitlementOverrides"> | null,
+) {
+  return getEffectiveBillingEntitlements(billing).memberLimit;
+}
+
+export function billingHasFeature(
+  billing: Pick<ChurchBilling, "planKey" | "entitlementOverrides"> | null | undefined,
+  feature: BillingPlanFeature,
+) {
+  return getEffectiveBillingEntitlements(billing).features.includes(feature);
+}
+
+export function billingHasReportAccess(
+  billing: Pick<ChurchBilling, "planKey" | "entitlementOverrides"> | null | undefined,
+  requiredAccess: BillingReportAccessLevel,
+) {
+  const reportAccessRank: Record<BillingReportAccessLevel, number> = {
+    basic: 0,
+    advanced: 1,
+    full: 2,
+  };
+  const entitlements = getEffectiveBillingEntitlements(billing);
+
+  return reportAccessRank[entitlements.reportAccess] >= reportAccessRank[requiredAccess];
+}
+
+export function isSubscriptionPlanKey(value: unknown): value is SubscriptionPlanKey {
+  return BILLING_PLANS.some((plan) => plan.key === value);
+}
+
+export function isSelfServeBillingPlanKey(value: unknown): value is SubscriptionPlanKey {
+  return BILLING_PLANS.some((plan) => plan.key === value && plan.selfServeEnabled);
+}
 
 export interface ChurchBilling {
   provider: "paystack";
@@ -142,6 +320,7 @@ export interface ChurchBilling {
   authorizationCode?: string;
   lastPaymentReference?: string;
   lastPaymentAt?: string;
+  entitlementOverrides?: ChurchBillingEntitlementOverrides;
 }
 
 export interface ChurchSubscriptionPaymentRecord {
@@ -240,6 +419,7 @@ export interface UpdateChurchBillingRequest {
   authorizationCode?: string;
   lastPaymentReference?: string;
   lastPaymentAt?: string;
+  entitlementOverrides?: ChurchBillingEntitlementOverrides | null;
 }
 
 export interface CreateChurchSubscriptionPaymentRecordRequest {
@@ -521,6 +701,7 @@ export interface AdminAuthResponse {
 
 export interface AdminBillingPlan extends BillingPlan {
   paystackPlanCode?: string;
+  paystackCheckoutUrl?: string;
   isConfigured: boolean;
 }
 
@@ -532,6 +713,6 @@ export interface CreatePaystackCheckoutRequest {
 
 export interface PaystackCheckoutResponse {
   authorizationUrl: string;
-  accessCode: string;
-  reference: string;
+  accessCode?: string;
+  reference?: string;
 }

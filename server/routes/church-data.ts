@@ -1,6 +1,7 @@
 import { RequestHandler } from "express";
 import type {
   AttendanceRecord,
+  BillingPlanFeature,
   Church,
   ChurchBranch,
   ChurchEvent,
@@ -11,6 +12,11 @@ import type {
   Donation,
   MarkAttendanceRequest,
   Member,
+} from "../../shared/api.js";
+import {
+  billingHasFeature,
+  getEffectiveBillingMemberLimit,
+  getBillingPlanByKey,
 } from "../../shared/api.js";
 import { createId, readDatabase, updateDatabase } from "../data/database.js";
 import { findChurchBranch, resolvePrimaryBranchId } from "../lib/branches.js";
@@ -53,6 +59,31 @@ function requireChurchWorkspaceAccess(req: any, res: any) {
   }
 
   return churchId;
+}
+
+function requireChurchPlanFeature(
+  req: any,
+  res: any,
+  feature: BillingPlanFeature,
+  errorMessage: string,
+) {
+  const church = (req.church as Church | null) ?? null;
+
+  if (!church) {
+    res.status(401).json({ success: false, error: "Unauthorized" });
+    return null;
+  }
+
+  if (!billingHasFeature(church.billing, feature)) {
+    const plan = getBillingPlanByKey(church.billing.planKey);
+    res.status(403).json({
+      success: false,
+      error: `${plan.name} ${errorMessage}`,
+    });
+    return null;
+  }
+
+  return church;
 }
 
 function filterByBranchScope<T extends { churchId: string; branchId?: string }>(
@@ -200,6 +231,19 @@ export const handleCreateMember: RequestHandler = async (req: any, res) => {
         return { error: "Church not found" as const, statusCode: 404 };
       }
 
+      const memberLimit = getEffectiveBillingMemberLimit(church.billing);
+      const currentMemberCount = database.members.filter(
+        (member) => member.churchId === churchId,
+      ).length;
+
+      if (memberLimit !== null && currentMemberCount >= memberLimit) {
+        const plan = getBillingPlanByKey(church.billing.planKey);
+        return {
+          error: `${plan.name} includes up to ${memberLimit} members. Upgrade this church to add more members.`,
+          statusCode: 403,
+        };
+      }
+
       const branchId = resolveTargetBranchId({
         requestedBranchId: memberData.branchId,
         scopedBranchId,
@@ -256,6 +300,16 @@ export const handleGetDonations: RequestHandler = async (req: any, res) => {
     if (!churchId) {
       return;
     }
+    if (
+      !requireChurchPlanFeature(
+        req,
+        res,
+        "giving",
+        "does not include giving and donation tracking. Upgrade to Growth or higher to access this section.",
+      )
+    ) {
+      return;
+    }
     const branchId = getBranchId(req);
 
     const database = await readDatabase();
@@ -272,6 +326,16 @@ export const handleCreateDonation: RequestHandler = async (req: any, res) => {
   try {
     const churchId = requireChurchWorkspaceAccess(req, res);
     if (!churchId) {
+      return;
+    }
+    if (
+      !requireChurchPlanFeature(
+        req,
+        res,
+        "giving",
+        "does not include giving and donation tracking. Upgrade to Growth or higher to record gifts.",
+      )
+    ) {
       return;
     }
     const scopedBranchId = getBranchId(req);
@@ -496,8 +560,12 @@ export const handleGetDashboardData: RequestHandler = async (req: any, res) => {
 
     const members = filterByBranchScope(database.members, churchId, branchId)
       .sort((left, right) => right.joinDate.localeCompare(left.joinDate));
-    const donations = filterByBranchScope(database.donations, churchId, branchId)
-      .sort((left, right) => right.date.localeCompare(left.date));
+    const canAccessGiving = billingHasFeature(church.billing, "giving");
+    const donations = canAccessGiving
+      ? filterByBranchScope(database.donations, churchId, branchId).sort((left, right) =>
+          right.date.localeCompare(left.date),
+        )
+      : [];
     const events = filterByBranchScope(database.events, churchId, branchId)
       .sort((left, right) => left.date.localeCompare(right.date));
     const attendance = filterByBranchScope(database.attendance, churchId, branchId);
@@ -511,7 +579,7 @@ export const handleGetDashboardData: RequestHandler = async (req: any, res) => {
       weeklyAttendance: branchId
         ? calculateScopedWeeklyAttendance(events, attendance, church.weeklyAttendance)
         : church.weeklyAttendance,
-      donationTrend: buildDonationTrend(donations),
+      donationTrend: canAccessGiving ? buildDonationTrend(donations) : [],
       memberGrowth: buildMemberGrowth(members),
     };
 

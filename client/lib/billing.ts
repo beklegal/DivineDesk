@@ -1,9 +1,14 @@
 import {
-  BILLING_PLANS,
+  billingHasFeature,
+  billingHasReportAccess,
   DEFAULT_BILLING_TRIAL_DAYS,
+  type BillingPlanFeature,
+  type BillingReportAccessLevel,
   type Church,
   type BillingPlan,
   type SubscriptionPlanKey,
+  getEffectiveBillingMemberLimit,
+  getBillingPlanByKey,
   isChurchWorkspaceLocked as isSharedChurchWorkspaceLocked,
 } from "@shared/api";
 import { formatAdminCurrency } from "@/lib/currency";
@@ -13,7 +18,12 @@ export function formatSubscriptionAmount(amount: number) {
 }
 
 export function getBillingPlanSummary(plan: Pick<BillingPlan, "name" | "amount">) {
-  return `${plan.name} - ${formatSubscriptionAmount(plan.amount)}/month`;
+  const priceLabel =
+    "publicPriceLabel" in plan && typeof plan.publicPriceLabel === "string"
+      ? plan.publicPriceLabel
+      : `${formatSubscriptionAmount(plan.amount)}/month`;
+
+  return `${plan.name} - ${priceLabel}`;
 }
 
 export function getBillingTrialLabel() {
@@ -21,7 +31,25 @@ export function getBillingTrialLabel() {
 }
 
 export function findBillingPlan(planKey?: SubscriptionPlanKey | null) {
-  return BILLING_PLANS.find((plan) => plan.key === planKey) ?? BILLING_PLANS[0];
+  return getBillingPlanByKey(planKey);
+}
+
+export function getChurchMemberLimit(church?: Pick<Church, "billing"> | null) {
+  return getEffectiveBillingMemberLimit(church?.billing);
+}
+
+export function churchHasBillingFeature(
+  church: Pick<Church, "billing"> | null | undefined,
+  feature: BillingPlanFeature,
+) {
+  return billingHasFeature(church?.billing, feature);
+}
+
+export function churchHasReportAccess(
+  church: Pick<Church, "billing"> | null | undefined,
+  requiredAccess: BillingReportAccessLevel,
+) {
+  return billingHasReportAccess(church?.billing, requiredAccess);
 }
 
 export function isChurchWorkspaceLocked(church?: Pick<Church, "billing" | "status"> | null) {

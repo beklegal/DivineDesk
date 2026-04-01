@@ -11,9 +11,12 @@ import {
   Wallet,
   X,
 } from "lucide-react";
+import type { BillingPlanFeature } from "@shared/api";
+import type { LucideIcon } from "lucide-react";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatUserRole } from "@/lib/auth";
+import { churchHasBillingFeature } from "@/lib/billing";
 import { cn } from "@/lib/utils";
 
 interface SidebarProps {
@@ -24,16 +27,26 @@ interface SidebarProps {
 const navigationItems = [
   { icon: Home, label: "Overview", href: "/dashboard" },
   { icon: Users, label: "Members", href: "/members" },
-  { icon: Wallet, label: "Giving", href: "/donations" },
+  { icon: Wallet, label: "Giving", href: "/donations", requiredFeature: "giving" },
   { icon: Calendar, label: "Events", href: "/events" },
   { icon: HeartHandshake, label: "Attendance", href: "/attendance" },
   { icon: BarChart3, label: "Reports", href: "/reports" },
   { icon: Settings, label: "Settings", href: "/settings" },
-];
+] satisfies Array<{
+  icon: LucideIcon;
+  label: string;
+  href: string;
+  requiredFeature?: BillingPlanFeature;
+}>;
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const { branch, church, user } = useAuth();
+  const hasGivingAccess = churchHasBillingFeature(church, "giving");
+  const visibleNavigationItems = navigationItems.filter(
+    (item) =>
+      !item.requiredFeature || churchHasBillingFeature(church, item.requiredFeature),
+  );
 
   const churchInitials =
     church?.name
@@ -119,7 +132,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         </div>
 
         <nav className="space-y-2">
-          {navigationItems.map((item) => {
+          {visibleNavigationItems.map((item) => {
             const Icon = item.icon;
             const active = location.pathname === item.href;
 
@@ -158,7 +171,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="mt-auto rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur">
           <p className="text-sm font-semibold text-white">Built for weekly rhythm</p>
           <p className="mt-2 text-sm leading-6 text-slate-300">
-            Track attendance, giving, and follow-up from one calm workspace built for ministry teams.
+            {hasGivingAccess
+              ? "Track attendance, giving, and follow-up from one calm workspace built for ministry teams."
+              : "Track attendance, members, and follow-up from one calm workspace built for ministry teams."}
           </p>
         </div>
       </aside>

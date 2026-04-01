@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
-import { formatSubscriptionAmount } from "@/lib/billing";
+import { formatSubscriptionAmount, getBillingPlanSummary } from "@/lib/billing";
 import { formatAdminCurrency } from "@/lib/currency";
 import { BILLING_PLANS, ChurchAdmin, CreateChurchRequest } from "@shared/api";
 
@@ -45,6 +45,8 @@ export default function AdminChurches() {
   });
   const [error, setError] = useState("");
   const { token } = useAuth();
+  const selectedBillingPlan =
+    BILLING_PLANS.find((plan) => plan.key === formData.billingPlanKey) ?? BILLING_PLANS[0];
 
   useEffect(() => {
     if (!token) {
@@ -265,11 +267,15 @@ export default function AdminChurches() {
                   <SelectContent>
                     {BILLING_PLANS.map((plan) => (
                       <SelectItem key={plan.key} value={plan.key}>
-                        {plan.name} - {formatSubscriptionAmount(plan.amount)}/month
+                        {getBillingPlanSummary(plan)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  <p className="font-medium text-slate-900">{selectedBillingPlan.targetProfile}</p>
+                  <p className="mt-1">{selectedBillingPlan.description}</p>
+                </div>
               </div>
             </div>
 

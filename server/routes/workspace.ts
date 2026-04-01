@@ -1,11 +1,14 @@
 import { RequestHandler } from "express";
 import type {
+  BillingPlanFeature,
   BranchAdminSummary,
+  Church,
   ChurchWorkspace,
   CreateBranchAdminRequest,
   CreateChurchBranchRequest,
   UpdateChurchProfileRequest,
 } from "../../shared/api.js";
+import { billingHasFeature, getBillingPlanByKey } from "../../shared/api.js";
 import { canManageChurchWorkspace } from "../../shared/permissions.js";
 import {
   createId,
@@ -63,6 +66,31 @@ function requireChurchWorkspaceManager(req: any, res: any) {
   }
 
   return churchId;
+}
+
+function requireChurchPlanFeature(
+  req: any,
+  res: any,
+  feature: BillingPlanFeature,
+  errorMessage: string,
+) {
+  const church = (req.church as Church | null) ?? null;
+
+  if (!church) {
+    res.status(401).json({ success: false, error: "Unauthorized" });
+    return null;
+  }
+
+  if (!billingHasFeature(church.billing, feature)) {
+    const plan = getBillingPlanByKey(church.billing.planKey);
+    res.status(403).json({
+      success: false,
+      error: `${plan.name} ${errorMessage}`,
+    });
+    return null;
+  }
+
+  return church;
 }
 
 function normalizeOptionalString(value: unknown) {
@@ -203,6 +231,16 @@ export const handleCreateChurchBranch: RequestHandler = async (req: any, res) =>
     if (!churchId) {
       return;
     }
+    if (
+      !requireChurchPlanFeature(
+        req,
+        res,
+        "multi_branch_management",
+        "does not include multi-branch management. Upgrade to Enterprise or Custom to add more branches.",
+      )
+    ) {
+      return;
+    }
 
     const payload = (req.body ?? {}) as CreateChurchBranchRequest;
     const branchName = normalizeOptionalString(payload.name);
@@ -262,6 +300,16 @@ export const handleCreateBranchAdmin: RequestHandler = async (req: any, res) => 
   try {
     const churchId = requireChurchWorkspaceManager(req, res);
     if (!churchId) {
+      return;
+    }
+    if (
+      !requireChurchPlanFeature(
+        req,
+        res,
+        "delegated_access",
+        "does not include delegated branch-admin access. Upgrade to Growth or higher to assign branch admins.",
+      )
+    ) {
       return;
     }
 

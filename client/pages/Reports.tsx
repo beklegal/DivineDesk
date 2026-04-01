@@ -13,9 +13,12 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useChurchWorkspace } from "@/hooks/useChurchWorkspace";
+import { churchHasReportAccess, findBillingPlan } from "@/lib/billing";
 import {
   exportChurchReport,
   fetchChurchReportSource,
+  getAvailableReportDefinitions,
+  getReportDefinition,
   REPORT_DEFINITIONS,
   type ReportFormat,
   type ReportId,
@@ -33,10 +36,18 @@ export default function Reports() {
   const { branches } = useChurchWorkspace({ enabled: Boolean(token) });
   const [activeDownload, setActiveDownload] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const currentPlan = church ? findBillingPlan(church.billing.planKey) : null;
+  const availableReports = getAvailableReportDefinitions(church?.billing);
+  const lockedReportCount = REPORT_DEFINITIONS.length - availableReports.length;
 
   const handleExport = async (reportId: ReportId, format: ReportFormat) => {
     if (!token) {
       setError("You need to be signed in before downloading reports.");
+      return;
+    }
+    const reportDefinition = getReportDefinition(reportId);
+    if (!churchHasReportAccess(church, reportDefinition.minimumAccess)) {
+      setError("This report is not included in your current subscription tier.");
       return;
     }
 
@@ -45,7 +56,7 @@ export default function Reports() {
     setError(null);
 
     try {
-      const data = await fetchChurchReportSource(token);
+      const data = await fetchChurchReportSource(token, reportId);
 
       exportChurchReport({
         reportId,
@@ -69,7 +80,11 @@ export default function Reports() {
   return (
     <AppShell
       title="Reports & analytics"
-      description="Generate live exports from your church data, including members, giving, attendance, event participation, ministry growth, and financial health."
+      description={
+        currentPlan
+          ? `${currentPlan.name} includes ${availableReports.length} live report${availableReports.length === 1 ? "" : "s"} for this workspace.`
+          : "Generate live exports from your church data."
+      }
       icon={BarChart3}
       eyebrow="Export center"
       actions={
@@ -85,13 +100,19 @@ export default function Reports() {
           {error}
         </div>
       ) : null}
+      {lockedReportCount > 0 ? (
+        <div className="rounded-[28px] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800 shadow-sm">
+          {currentPlan?.name ?? "Current plan"} currently unlocks {availableReports.length} of{" "}
+          {REPORT_DEFINITIONS.length} reports. Upgrade for deeper analytics and finance exports.
+        </div>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Available reports</p>
-          <p className="mt-3 text-3xl font-semibold text-slate-950">{REPORT_DEFINITIONS.length}</p>
+          <p className="mt-3 text-3xl font-semibold text-slate-950">{availableReports.length}</p>
           <p className="mt-2 text-sm text-slate-500">
-            Church admins can download each report as PDF or Excel.
+            Downloads reflect the reports included in your current subscription tier.
           </p>
         </div>
 
@@ -115,7 +136,7 @@ export default function Reports() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-        {REPORT_DEFINITIONS.map((report) => {
+        {availableReports.map((report) => {
           const Icon = reportIcons[report.type];
           const pdfKey = `${report.id}:pdf`;
           const excelKey = `${report.id}:excel`;

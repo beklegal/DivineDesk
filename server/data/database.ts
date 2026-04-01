@@ -81,6 +81,14 @@ const billingStatusSchema = z.enum([
   "canceled",
   "suspended",
 ]);
+const billingReportAccessSchema = z.enum(["basic", "advanced", "full"]);
+const billingPlanFeatureSchema = z.enum([
+  "giving",
+  "delegated_access",
+  "multi_branch_management",
+  "priority_support",
+  "integrations",
+]);
 const subscriptionPaymentMethodSchema = z.enum([
   "paystack",
   "bank_transfer",
@@ -94,6 +102,13 @@ const subscriptionPaymentSourceSchema = z.enum([
   "paystack_webhook",
 ]);
 const branchStatusSchema = z.enum(["active", "inactive"]);
+
+const billingEntitlementOverrideSchema = z.object({
+  memberLimit: z.number().int().nonnegative().nullable().optional(),
+  reportAccess: billingReportAccessSchema.optional(),
+  enabledFeatures: z.array(billingPlanFeatureSchema).optional(),
+  disabledFeatures: z.array(billingPlanFeatureSchema).optional(),
+});
 
 const billingSchema = z.object({
   provider: z.literal("paystack"),
@@ -113,6 +128,7 @@ const billingSchema = z.object({
   authorizationCode: z.string().optional(),
   lastPaymentReference: z.string().optional(),
   lastPaymentAt: dateString.optional(),
+  entitlementOverrides: billingEntitlementOverrideSchema.optional(),
 });
 
 const churchSchema = z.object({

@@ -1,4 +1,13 @@
-import type { Church, ChurchBranch, ChurchEvent, Donation, Member } from "@shared/api";
+import {
+  billingHasReportAccess,
+  type BillingReportAccessLevel,
+  type ChurchBilling,
+  type Church,
+  type ChurchBranch,
+  type ChurchEvent,
+  type Donation,
+  type Member,
+} from "@shared/api";
 import { formatChurchCurrency } from "@/lib/currency";
 
 const monthFormatter = new Intl.DateTimeFormat("en-US", { month: "short" });
@@ -18,6 +27,8 @@ export interface ReportDefinition {
   name: string;
   description: string;
   type: "Members" | "Finance" | "Attendance" | "Events";
+  minimumAccess: BillingReportAccessLevel;
+  sources: Array<keyof ChurchReportSource>;
 }
 
 export interface ChurchReportSource {
@@ -47,38 +58,68 @@ export const REPORT_DEFINITIONS: ReportDefinition[] = [
     name: "Member Directory Report",
     description: "Complete list of all church members with contact information",
     type: "Members",
+    minimumAccess: "basic",
+    sources: ["members"],
   },
   {
     id: "donation-summary",
     name: "Donation Summary Report",
     description: "Monthly and yearly donation statistics by member",
     type: "Finance",
+    minimumAccess: "advanced",
+    sources: ["members", "donations"],
   },
   {
     id: "attendance",
     name: "Attendance Report",
     description: "Attendance trends and participation rates",
     type: "Attendance",
+    minimumAccess: "basic",
+    sources: ["events"],
   },
   {
     id: "event-participation",
     name: "Event Participation Report",
     description: "Event attendance and engagement metrics",
     type: "Events",
+    minimumAccess: "advanced",
+    sources: ["events"],
   },
   {
     id: "ministry-growth",
     name: "Ministry Growth Report",
     description: "Growth trends by ministry group",
     type: "Members",
+    minimumAccess: "full",
+    sources: ["members"],
   },
   {
     id: "financial-health",
     name: "Financial Health Report",
     description: "Year-to-date financial overview",
     type: "Finance",
+    minimumAccess: "full",
+    sources: ["donations"],
   },
 ];
+
+export function getReportDefinition(reportId: ReportId) {
+  const report = REPORT_DEFINITIONS.find((item) => item.id === reportId);
+
+  if (!report) {
+    throw new Error("Unsupported report");
+  }
+
+  return report;
+}
+
+export function getAvailableReportDefinitions(
+  billing?: Pick<ChurchBilling, "planKey" | "entitlementOverrides"> | null,
+) {
+  return REPORT_DEFINITIONS.filter((report) =>
+    billingHasReportAccess(billing, report.minimumAccess),
+  );
+}
 
 function formatDate(value?: string) {
   if (!value) {
@@ -647,33 +688,44 @@ function buildPdfBlob(report: PreparedReport) {
   return new Blob([pdf], { type: "application/pdf" });
 }
 
-export async function fetchChurchReportSource(token: string): Promise<ChurchReportSource> {
+export async function fetchChurchReportSource(
+  token: string,
+  reportId: ReportId,
+): Promise<ChurchReportSource> {
   const headers = {
     Authorization: `Bearer ${token}`,
   };
+  const report = getReportDefinition(reportId);
+  const endpointMap: Record<keyof ChurchReportSource, string> = {
+    members: "/api/members",
+    donations: "/api/donations",
+    events: "/api/events",
+  };
 
-  const [membersResponse, donationsResponse, eventsResponse] = await Promise.all([
-    fetch("/api/members", { headers }),
-    fetch("/api/donations", { headers }),
-    fetch("/api/events", { headers }),
-  ]);
+  const payloads = await Promise.all(
+    report.sources.map(async (source) => {
+      const response = await fetch(endpointMap[source], { headers });
+      const payload = await response.json();
 
-  const responses = [membersResponse, donationsResponse, eventsResponse];
-  const failedResponse = responses.find((response) => !response.ok);
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to load report data");
+      }
 
-  if (failedResponse) {
-    throw new Error("Failed to load report data");
-  }
-
-  const [membersPayload, donationsPayload, eventsPayload] = await Promise.all(
-    responses.map((response) => response.json()),
+      return [source, payload.data || []] as const;
+    }),
   );
 
-  return {
-    members: membersPayload.data || [],
-    donations: donationsPayload.data || [],
-    events: eventsPayload.data || [],
+  const data: ChurchReportSource = {
+    members: [],
+    donations: [],
+    events: [],
   };
+
+  payloads.forEach(([source, records]) => {
+    data[source] = records;
+  });
+
+  return data;
 }
 
 export function exportChurchReport(options: {

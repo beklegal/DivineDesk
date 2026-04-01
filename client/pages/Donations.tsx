@@ -17,6 +17,7 @@ import { Donation } from "@shared/api";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useChurchWorkspace } from "@/hooks/useChurchWorkspace";
 import { formatUserRole } from "@/lib/auth";
+import { churchHasBillingFeature, findBillingPlan } from "@/lib/billing";
 import { formatChurchCurrency } from "@/lib/currency";
 
 export default function Donations() {
@@ -38,6 +39,8 @@ export default function Donations() {
   const { branches } = useChurchWorkspace({ enabled: !!token });
   const navigate = useNavigate();
   const branchMap = new Map(branches.map((item) => [item.id, item.name]));
+  const hasGivingAccess = churchHasBillingFeature(church, "giving");
+  const currentPlan = church ? findBillingPlan(church.billing.planKey) : null;
 
   const handleLogout = () => {
     logout();
@@ -45,11 +48,15 @@ export default function Donations() {
   };
 
   useEffect(() => {
-    if (token) {
-      fetchDonations();
-      fetchMembers();
+    if (!token || !hasGivingAccess) {
+      setDonations([]);
+      setMembers([]);
+      return;
     }
-  }, [token]);
+
+    fetchDonations();
+    fetchMembers();
+  }, [hasGivingAccess, token]);
 
   const fetchDonations = async () => {
     if (!token) return;
@@ -90,6 +97,10 @@ export default function Donations() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasGivingAccess) {
+      setError("Upgrade this church to Growth or higher to record donations.");
+      return;
+    }
     if (!formData.memberId || !formData.amount) {
       setError("Please fill in all fields");
       return;
@@ -112,7 +123,8 @@ export default function Donations() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to add donation");
+        const payload = await response.json();
+        throw new Error(payload.error || "Failed to add donation");
       }
 
       setFormData({
@@ -201,213 +213,230 @@ export default function Donations() {
         {/* Content */}
         <div className="flex-1 overflow-auto">
           <div className="p-6 max-w-7xl mx-auto space-y-6">
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-white rounded-xl p-6 border border-gray-100 hover:shadow-xl hover:scale-105 transition-all duration-300">
-                <h3 className="text-gray-600 font-medium text-sm mb-3">Total Donations</h3>
-                <p className="text-4xl font-bold text-primary mb-2">
-                  {formatChurchCurrency(totalDonations)}
-                </p>
-                <div className="text-sm text-gray-600">All time giving</div>
+            {!hasGivingAccess ? (
+              <div className="bg-white rounded-2xl border border-amber-200 p-8 shadow-sm">
+                <div className="max-w-3xl">
+                  <p className="text-sm font-semibold uppercase tracking-[0.24em] text-amber-700">
+                    Upgrade required
+                  </p>
+                  <h2 className="mt-3 text-3xl font-bold text-primary">
+                    Giving tools start on Growth
+                  </h2>
+                  <p className="mt-4 text-base leading-7 text-gray-600">
+                    {currentPlan?.name ?? "This"} plan keeps member records, attendance, and basic
+                    reporting in place. Upgrade to Growth or higher to record tithes, offerings,
+                    donation history, and finance summaries for this church.
+                  </p>
+                </div>
               </div>
-              <div className="bg-white rounded-xl p-6 border border-gray-100 hover:shadow-xl hover:scale-105 transition-all duration-300">
-                <h3 className="text-gray-600 font-medium text-sm mb-3">Number of Gifts</h3>
-                <p className="text-4xl font-bold text-gold mb-2">{donations.length}</p>
-                <div className="text-sm text-gray-600">Total records</div>
-              </div>
-              <div className="bg-white rounded-xl p-6 border border-gray-100 hover:shadow-xl hover:scale-105 transition-all duration-300">
-                <h3 className="text-gray-600 font-medium text-sm mb-3">Average Gift</h3>
-                <p className="text-4xl font-bold text-primary mb-2">
-                  {formatChurchCurrency(averageGift)}
-                </p>
-                <div className="text-sm text-gray-600">Per donation</div>
-              </div>
-            </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="bg-white rounded-xl p-6 border border-gray-100 hover:shadow-xl hover:scale-105 transition-all duration-300">
+                    <h3 className="text-gray-600 font-medium text-sm mb-3">Total Donations</h3>
+                    <p className="text-4xl font-bold text-primary mb-2">
+                      {formatChurchCurrency(totalDonations)}
+                    </p>
+                    <div className="text-sm text-gray-600">All time giving</div>
+                  </div>
+                  <div className="bg-white rounded-xl p-6 border border-gray-100 hover:shadow-xl hover:scale-105 transition-all duration-300">
+                    <h3 className="text-gray-600 font-medium text-sm mb-3">Number of Gifts</h3>
+                    <p className="text-4xl font-bold text-gold mb-2">{donations.length}</p>
+                    <div className="text-sm text-gray-600">Total records</div>
+                  </div>
+                  <div className="bg-white rounded-xl p-6 border border-gray-100 hover:shadow-xl hover:scale-105 transition-all duration-300">
+                    <h3 className="text-gray-600 font-medium text-sm mb-3">Average Gift</h3>
+                    <p className="text-4xl font-bold text-primary mb-2">
+                      {formatChurchCurrency(averageGift)}
+                    </p>
+                    <div className="text-sm text-gray-600">Per donation</div>
+                  </div>
+                </div>
 
-            {/* Add Donation Form */}
-            {showAddForm && (
-              <div className="bg-white rounded-xl p-6 border border-gray-100">
-                <h3 className="text-lg font-bold text-primary mb-4">Record Donation</h3>
-                {error && (
-                  <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                    {error}
+                {showAddForm && (
+                  <div className="bg-white rounded-xl p-6 border border-gray-100">
+                    <h3 className="text-lg font-bold text-primary mb-4">Record Donation</h3>
+                    {error && (
+                      <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                        {error}
+                      </div>
+                    )}
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-primary font-semibold">Member</Label>
+                          <Select value={formData.memberId} onValueChange={(value) => setFormData({ ...formData, memberId: value })}>
+                            <SelectTrigger className="h-11">
+                              <SelectValue placeholder="Select member" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {members.map((member) => (
+                                <SelectItem key={member.id} value={member.id}>
+                                  {member.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label className="text-primary font-semibold">Amount (GHS)</Label>
+                          <Input
+                            type="number"
+                            placeholder="0.00"
+                            value={formData.amount}
+                            onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                            step="0.01"
+                            min="0"
+                            className="h-11"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label className="text-primary font-semibold">Type</Label>
+                          <Select value={formData.type} onValueChange={(value: any) => setFormData({ ...formData, type: value })}>
+                            <SelectTrigger className="h-11">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="tithe">Tithe</SelectItem>
+                              <SelectItem value="offering">Offering</SelectItem>
+                              <SelectItem value="special_gift">Special Gift</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label className="text-primary font-semibold">Notes</Label>
+                          <Input
+                            placeholder="Optional notes"
+                            value={formData.notes}
+                            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                            className="h-11"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3 pt-4">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setShowAddForm(false)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="submit"
+                          disabled={isLoading}
+                          className="bg-primary hover:bg-primary/90 text-white"
+                        >
+                          {isLoading ? "Recording..." : "Record Donation"}
+                        </Button>
+                      </div>
+                    </form>
                   </div>
                 )}
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-primary font-semibold">Member</Label>
-                      <Select value={formData.memberId} onValueChange={(value) => setFormData({ ...formData, memberId: value })}>
-                        <SelectTrigger className="h-11">
-                          <SelectValue placeholder="Select member" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {members.map((member) => (
-                            <SelectItem key={member.id} value={member.id}>
-                              {member.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
 
-                    <div className="space-y-2">
-                      <Label className="text-primary font-semibold">Amount (GHS)</Label>
-                      <Input
-                        type="number"
-                        placeholder="0.00"
-                        value={formData.amount}
-                        onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                        step="0.01"
-                        min="0"
-                        className="h-11"
-                        required
-                      />
-                    </div>
+                {!showAddForm && (
+                  <Button
+                    onClick={() => setShowAddForm(true)}
+                    className="bg-primary hover:bg-primary/90 text-white"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Record Donation
+                  </Button>
+                )}
 
-                    <div className="space-y-2">
-                      <Label className="text-primary font-semibold">Type</Label>
-                      <Select value={formData.type} onValueChange={(value: any) => setFormData({ ...formData, type: value })}>
-                        <SelectTrigger className="h-11">
+                <div className="bg-white rounded-xl border border-gray-100">
+                  <div className="p-6 border-b border-gray-100">
+                    <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
+                      <div className="flex-1 relative">
+                        <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                        <Input
+                          placeholder="Search donations..."
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                          className="pl-10 h-11"
+                        />
+                      </div>
+                      <Select value={filterType} onValueChange={setFilterType}>
+                        <SelectTrigger className="h-11 w-full sm:w-40">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="tithe">Tithe</SelectItem>
-                          <SelectItem value="offering">Offering</SelectItem>
-                          <SelectItem value="special_gift">Special Gift</SelectItem>
+                          <SelectItem value="all">All Types</SelectItem>
+                          <SelectItem value="tithe">Tithes</SelectItem>
+                          <SelectItem value="offering">Offerings</SelectItem>
+                          <SelectItem value="special_gift">Special Gifts</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
 
-                    <div className="space-y-2">
-                      <Label className="text-primary font-semibold">Notes</Label>
-                      <Input
-                        placeholder="Optional notes"
-                        value={formData.notes}
-                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                        className="h-11"
-                      />
+                  {isLoading ? (
+                    <div className="p-8 flex justify-center">
+                      <Loader className="w-6 h-6 text-primary animate-spin" />
                     </div>
-                  </div>
-
-                  <div className="flex gap-3 pt-4">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setShowAddForm(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={isLoading}
-                      className="bg-primary hover:bg-primary/90 text-white"
-                    >
-                      {isLoading ? "Recording..." : "Record Donation"}
-                    </Button>
-                  </div>
-                </form>
-              </div>
+                  ) : filteredDonations.length === 0 ? (
+                    <div className="p-8 text-center text-gray-600">
+                      No donations recorded yet.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-50 border-b border-gray-100">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Member</th>
+                            {branches.length > 1 ? (
+                              <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Branch</th>
+                            ) : null}
+                            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Type</th>
+                            <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">Amount</th>
+                            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Date</th>
+                            <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Notes</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredDonations.map((donation) => (
+                            <tr key={donation.id} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                                {donation.memberName}
+                              </td>
+                              {branches.length > 1 ? (
+                                <td className="px-6 py-4 text-sm text-gray-600">
+                                  {branchMap.get(donation.branchId || "") || "Primary branch"}
+                                </td>
+                              ) : null}
+                              <td className="px-6 py-4 text-sm">
+                                <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                                  donation.type === "tithe"
+                                    ? "bg-blue-100 text-blue-700"
+                                    : donation.type === "offering"
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-purple-100 text-purple-700"
+                                }`}>
+                                  {donation.type === "tithe"
+                                    ? "Tithe"
+                                    : donation.type === "offering"
+                                    ? "Offering"
+                                    : "Special Gift"}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-sm font-semibold text-primary text-right">
+                                {formatChurchCurrency(donation.amount)}
+                              </td>
+                              <td className="px-6 py-4 text-sm text-gray-600">{donation.date}</td>
+                              <td className="px-6 py-4 text-sm text-gray-600">{donation.notes || "-"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
-
-            {!showAddForm && (
-              <Button
-                onClick={() => setShowAddForm(true)}
-                className="bg-primary hover:bg-primary/90 text-white"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Record Donation
-              </Button>
-            )}
-
-            {/* Donations List */}
-            <div className="bg-white rounded-xl border border-gray-100">
-              <div className="p-6 border-b border-gray-100">
-                <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
-                  <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                    <Input
-                      placeholder="Search donations..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="pl-10 h-11"
-                    />
-                  </div>
-                  <Select value={filterType} onValueChange={setFilterType}>
-                    <SelectTrigger className="h-11 w-full sm:w-40">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Types</SelectItem>
-                      <SelectItem value="tithe">Tithes</SelectItem>
-                      <SelectItem value="offering">Offerings</SelectItem>
-                      <SelectItem value="special_gift">Special Gifts</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {isLoading ? (
-                <div className="p-8 flex justify-center">
-                  <Loader className="w-6 h-6 text-primary animate-spin" />
-                </div>
-              ) : filteredDonations.length === 0 ? (
-                <div className="p-8 text-center text-gray-600">
-                  No donations recorded yet.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-50 border-b border-gray-100">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Member</th>
-                        {branches.length > 1 ? (
-                          <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Branch</th>
-                        ) : null}
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Type</th>
-                        <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">Amount</th>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Date</th>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Notes</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredDonations.map((donation) => (
-                        <tr key={donation.id} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                            {donation.memberName}
-                          </td>
-                          {branches.length > 1 ? (
-                            <td className="px-6 py-4 text-sm text-gray-600">
-                              {branchMap.get(donation.branchId || "") || "Primary branch"}
-                            </td>
-                          ) : null}
-                          <td className="px-6 py-4 text-sm">
-                            <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
-                              donation.type === "tithe"
-                                ? "bg-blue-100 text-blue-700"
-                                : donation.type === "offering"
-                                ? "bg-green-100 text-green-700"
-                                : "bg-purple-100 text-purple-700"
-                            }`}>
-                              {donation.type === "tithe"
-                                ? "Tithe"
-                                : donation.type === "offering"
-                                ? "Offering"
-                                : "Special Gift"}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-sm font-semibold text-primary text-right">
-                            {formatChurchCurrency(donation.amount)}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-600">{donation.date}</td>
-                          <td className="px-6 py-4 text-sm text-gray-600">{donation.notes || "-"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </div>
