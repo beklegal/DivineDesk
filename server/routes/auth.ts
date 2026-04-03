@@ -249,7 +249,8 @@ function logAuthWarn(scope: string, details: Record<string, unknown>) {
   console.warn(`[auth] ${scope} ${JSON.stringify(details)}`);
 }
 
-export const handleDebugEnv: RequestHandler = (_req, res) => {
+export const handleDebugEnv: RequestHandler = (req, res) => {
+  console.info(`[debug-env] hit path=${req.path} url=${req.originalUrl}`);
   res.json({
     ok: true,
     nodeEnv: process.env.NODE_ENV ?? null,
