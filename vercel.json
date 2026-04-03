@@ -3,6 +3,9 @@
   "framework": "vite",
   "buildCommand": "pnpm vercel-build",
   "outputDirectory": "dist/spa",
+  "env": {
+    "NODEJS_HELPERS": "0"
+  },
   "functions": {
     "api/**/*.ts": {
       "includeFiles": "server/data/**/*.json",

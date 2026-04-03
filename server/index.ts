@@ -53,11 +53,11 @@ import {
 export function createServer() {
   const app = express();
   const debugApiRequests = process.env.DEBUG_API_REQUESTS === "true";
+  const jsonParser = express.json();
+  const urlencodedParser = express.urlencoded({ extended: true });
 
   // Middleware
   app.use(cors());
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
   app.use((req: any, res, next) => {
     if (!req.path.startsWith("/api")) {
       next();
@@ -98,6 +98,27 @@ export function createServer() {
     });
 
     next();
+  });
+  app.get("/api/ping", (_req, res) => {
+    const ping = process.env.PING_MESSAGE ?? "ping";
+    res.json({ message: ping });
+  });
+  app.get("/api/debug-env", handleDebugEnv);
+  app.get("/api/demo", handleDemo);
+  app.use((req, res, next) => {
+    if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
+      next();
+      return;
+    }
+
+    jsonParser(req, res, (jsonError) => {
+      if (jsonError) {
+        next(jsonError);
+        return;
+      }
+
+      urlencodedParser(req, res, next);
+    });
   });
   app.use((req: any, res, next) => {
     const publicPaths = ["/api/ping", "/api/demo", "/api/debug-env", "/api/auth/login", "/api/auth/signup", "/api/auth/demo"];
@@ -162,15 +183,6 @@ export function createServer() {
   // ============= Billing Webhooks =============
   app.post("/api/billing/paystack/webhook", handlePaystackWebhook);
 
-  // Example API routes
-  app.get("/api/ping", (_req, res) => {
-    const ping = process.env.PING_MESSAGE ?? "ping";
-    res.json({ message: ping });
-  });
-
-  app.get("/api/debug-env", handleDebugEnv);
-
-  app.get("/api/demo", handleDemo);
   app.use("/api", (req: any, res) => {
     console.warn(
       `[api] unmatched route ${JSON.stringify({
@@ -180,6 +192,30 @@ export function createServer() {
       })}`,
     );
     res.status(404).json({ success: false, error: "API endpoint not found" });
+  });
+  app.use((error: any, req: any, res: any, _next: any) => {
+    console.error(
+      `[api] unhandled error ${JSON.stringify({
+        requestId: req?.requestId ?? null,
+        method: req?.method ?? null,
+        path: req?.originalUrl ?? req?.url ?? null,
+        message: error instanceof Error ? error.message : String(error),
+        statusCode: error?.status ?? error?.statusCode ?? 500,
+      })}`,
+    );
+
+    if (res.headersSent) {
+      return;
+    }
+
+    const statusCode = error?.status ?? error?.statusCode ?? 500;
+    res.status(statusCode).json({
+      success: false,
+      error:
+        error instanceof Error && error.message
+          ? error.message
+          : "Internal server error",
+    });
   });
 
   return app;
