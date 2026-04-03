@@ -2,7 +2,7 @@
   "meta": {
     "version": 1,
     "createdAt": "2026-03-17T02:17:59.866Z",
-    "lastUpdated": "2026-04-01T15:25:38.138Z"
+    "lastUpdated": "2026-04-03T05:02:23.625Z"
   },
   "churches": [
     {
@@ -59,6 +59,63 @@
         "renewalDate": "2026-04-01",
         "trialEndsAt": "2026-05-01"
       }
+    },
+    {
+      "id": "church-shared-demo",
+      "name": "DivineDesk Demo Church",
+      "size": "medium",
+      "totalMembers": 4,
+      "monthlyDonations": 170,
+      "weeklyAttendance": 42,
+      "createdAt": "2026-03-13T06:02:22.699Z",
+      "lastUpdated": "2026-04-03T05:02:22.710Z",
+      "status": "active",
+      "adminName": "Demo Pastor",
+      "adminEmail": "demo@divinedesk.app",
+      "email": "demo@divinedesk.app",
+      "phone": "+233 20 555 0199",
+      "address": "Airport Residential, Accra",
+      "website": "https://divinedesk.app/demo",
+      "primaryBranchId": "branch-church-shared-demo-primary",
+      "billing": {
+        "provider": "paystack",
+        "planKey": "growth",
+        "planName": "Growth",
+        "amount": 25,
+        "currency": "USD",
+        "interval": "monthly",
+        "status": "trialing",
+        "billingEmail": "demo@divinedesk.app",
+        "startedAt": "2026-03-27T06:02:22.699Z",
+        "trialEndsAt": "2026-04-26T06:02:22.699Z"
+      }
+    },
+    {
+      "id": "church-1775192543624-ogpo88",
+      "name": "Test Church",
+      "size": "small",
+      "totalMembers": 1,
+      "monthlyDonations": 0,
+      "weeklyAttendance": 0,
+      "createdAt": "2026-04-03T05:02:23.623Z",
+      "lastUpdated": "2026-04-03T05:02:23.625Z",
+      "status": "active",
+      "adminName": "Test Admin",
+      "adminEmail": "test-1775192543593@example.com",
+      "email": "test-1775192543593@example.com",
+      "primaryBranchId": "branch-church-1775192543624-ogpo88-primary",
+      "billing": {
+        "provider": "paystack",
+        "planKey": "starter",
+        "planName": "Starter",
+        "amount": 10,
+        "currency": "USD",
+        "interval": "monthly",
+        "status": "trialing",
+        "billingEmail": "test-1775192543593@example.com",
+        "startedAt": "2026-04-03T05:02:23.623Z",
+        "trialEndsAt": "2026-05-03T05:02:23.623Z"
+      }
     }
   ],
   "branches": [
@@ -92,6 +149,28 @@
       "status": "active",
       "createdAt": "2026-03-18T11:35:54.426Z",
       "createdByUserId": "user-1773833479518-8wanx7"
+    },
+    {
+      "id": "branch-church-shared-demo-primary",
+      "churchId": "church-shared-demo",
+      "name": "Main Campus",
+      "email": "demo@divinedesk.app",
+      "phone": "+233 20 555 0199",
+      "address": "Airport Residential, Accra",
+      "isPrimary": true,
+      "status": "active",
+      "createdAt": "2026-03-13T06:02:22.699Z",
+      "createdByUserId": "user-shared-demo-admin"
+    },
+    {
+      "id": "branch-church-1775192543624-ogpo88-primary",
+      "churchId": "church-1775192543624-ogpo88",
+      "name": "Main Campus",
+      "email": "test-1775192543593@example.com",
+      "isPrimary": true,
+      "status": "active",
+      "createdAt": "2026-04-03T05:02:23.623Z",
+      "createdByUserId": "user-1775192543624-1852c5"
     }
   ],
   "users": [
@@ -106,6 +185,30 @@
       "status": "active",
       "createdAt": "2024-09-24T02:17:59.866Z",
       "lastLoginAt": "2026-04-01T15:16:40.264Z"
+    },
+    {
+      "id": "user-shared-demo-admin",
+      "name": "Demo Pastor",
+      "email": "demo@divinedesk.app",
+      "password": "$2b$10$U7W0ypiIo4lSoK6eo2AE4uCXdsEuLabrdgHxAP4b7VcVEuawofKzO",
+      "role": "admin",
+      "churchId": "church-shared-demo",
+      "branchId": "branch-church-shared-demo-primary",
+      "status": "active",
+      "createdAt": "2026-03-13T06:02:22.699Z",
+      "lastLoginAt": "2026-04-03T05:02:22.699Z"
+    },
+    {
+      "id": "user-1775192543624-1852c5",
+      "name": "Test Admin",
+      "email": "test-1775192543593@example.com",
+      "password": "$2b$10$GQlXNiZG3TwuwVLCPaOCk.iZVmzUV9XG8vPWBamnmxSykr2.6DOTi",
+      "role": "admin",
+      "churchId": "church-1775192543624-ogpo88",
+      "status": "active",
+      "createdAt": "2026-04-03T05:02:23.623Z",
+      "lastLoginAt": "2026-04-03T05:02:23.623Z",
+      "branchId": null
     }
   ],
   "members": [
@@ -134,10 +237,125 @@
       "joinDate": "2026-03-18",
       "status": "active",
       "notes": "Created during church onboarding."
+    },
+    {
+      "id": "member-shared-demo-admin",
+      "churchId": "church-shared-demo",
+      "branchId": "branch-church-shared-demo-primary",
+      "name": "Demo Pastor",
+      "email": "demo@divinedesk.app",
+      "phone": "+233 20 555 0199",
+      "address": "Airport Residential, Accra",
+      "ministryGroup": "Leadership",
+      "joinDate": "2026-03-13",
+      "status": "active",
+      "notes": "Primary admin account for the shared demo workspace."
+    },
+    {
+      "id": "member-shared-demo-ama",
+      "churchId": "church-shared-demo",
+      "branchId": "branch-church-shared-demo-primary",
+      "name": "Ama Boateng",
+      "email": "ama.demo@divinedesk.app",
+      "phone": "+233 24 111 2233",
+      "address": "East Legon, Accra",
+      "ministryGroup": "Worship",
+      "joinDate": "2026-03-20",
+      "status": "active",
+      "notes": "Demo member seeded for walkthroughs."
+    },
+    {
+      "id": "member-shared-demo-kwame",
+      "churchId": "church-shared-demo",
+      "branchId": "branch-church-shared-demo-primary",
+      "name": "Kwame Asare",
+      "email": "kwame.demo@divinedesk.app",
+      "phone": "+233 50 444 5566",
+      "address": "Tema Community 5",
+      "ministryGroup": "Ushering",
+      "joinDate": "2026-03-25",
+      "status": "active",
+      "notes": "Demo member seeded for giving and attendance examples."
+    },
+    {
+      "id": "member-shared-demo-linda",
+      "churchId": "church-shared-demo",
+      "branchId": "branch-church-shared-demo-primary",
+      "name": "Linda Mensah",
+      "email": "linda.demo@divinedesk.app",
+      "phone": "+233 27 777 8899",
+      "address": "Spintex Road, Accra",
+      "ministryGroup": "Children",
+      "joinDate": "2026-03-30",
+      "status": "visitor",
+      "notes": "Recent visitor record for the demo dashboard."
+    },
+    {
+      "id": "member-1775192543624-06ce02",
+      "churchId": "church-1775192543624-ogpo88",
+      "branchId": "branch-church-1775192543624-ogpo88-primary",
+      "name": "Test Admin",
+      "email": "test-1775192543593@example.com",
+      "phone": "",
+      "address": "",
+      "ministryGroup": "Leadership",
+      "joinDate": "2026-04-03",
+      "status": "active",
+      "notes": "Created during church onboarding."
     }
   ],
-  "donations": [],
-  "events": [],
+  "donations": [
+    {
+      "id": "donation-shared-demo-ama",
+      "churchId": "church-shared-demo",
+      "branchId": "branch-church-shared-demo-primary",
+      "memberId": "member-shared-demo-ama",
+      "memberName": "Ama Boateng",
+      "amount": 120,
+      "type": "tithe",
+      "date": "2026-03-28",
+      "notes": "Seeded demo tithe entry."
+    },
+    {
+      "id": "donation-shared-demo-kwame",
+      "churchId": "church-shared-demo",
+      "branchId": "branch-church-shared-demo-primary",
+      "memberId": "member-shared-demo-kwame",
+      "memberName": "Kwame Asare",
+      "amount": 50,
+      "type": "offering",
+      "date": "2026-04-01",
+      "notes": "Seeded demo offering entry."
+    }
+  ],
+  "events": [
+    {
+      "id": "event-shared-demo-sunday",
+      "churchId": "church-shared-demo",
+      "branchId": "branch-church-shared-demo-primary",
+      "name": "Sunday Celebration Service",
+      "date": "2026-03-31",
+      "time": "09:00",
+      "location": "Main Auditorium",
+      "description": "A completed service in the demo workspace with attendance data.",
+      "type": "service",
+      "status": "completed",
+      "registeredAttendees": 42
+    },
+    {
+      "id": "event-shared-demo-prayer",
+      "churchId": "church-shared-demo",
+      "branchId": "branch-church-shared-demo-primary",
+      "name": "Midweek Prayer Gathering",
+      "date": "2026-04-06",
+      "time": "18:30",
+      "location": "Main Campus Prayer Hall",
+      "description": "An upcoming event so new users can preview the calendar flow.",
+      "type": "meeting",
+      "status": "scheduled",
+      "registeredAttendees": 0
+    }
+  ],
   "attendance": [],
   "subscriptionPayments": []
 }

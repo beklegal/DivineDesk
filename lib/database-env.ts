@@ -5,13 +5,35 @@ function normalizeOptionalEnvironmentValue(value?: string | null) {
   return trimmed ? trimmed : null;
 }
 
+function isPlaceholderDatabaseUrl(value: string) {
+  const normalized = value.toLowerCase();
+
+  return (
+    normalized.includes("username:password@") ||
+    normalized.includes("your-neon-host") ||
+    normalized.includes("replace-with") ||
+    normalized.includes("<username>") ||
+    normalized.includes("<password>") ||
+    normalized.includes("<host>")
+  );
+}
+
+function isSupportedDatabaseProtocol(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "postgres:" || parsed.protocol === "postgresql:";
+  } catch {
+    return false;
+  }
+}
+
 function getFirstConfiguredValue(
   environment: EnvironmentLike,
   keys: readonly string[],
 ) {
   for (const key of keys) {
     const resolved = normalizeOptionalEnvironmentValue(environment[key]);
-    if (resolved) {
+    if (resolved && isSupportedDatabaseProtocol(resolved) && !isPlaceholderDatabaseUrl(resolved)) {
       return resolved;
     }
   }

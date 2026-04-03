@@ -29,4 +29,22 @@ describe("database env resolution", () => {
       }),
     ).toBe("postgres://manual-direct");
   });
+
+  it("ignores placeholder example URLs", () => {
+    expect(
+      getRuntimeDatabaseUrl({
+        DATABASE_URL: "postgres://username:password@your-neon-host-pooler.neon.tech/neondb",
+        DIRECT_URL: "postgres://username:password@your-neon-host.neon.tech/neondb",
+      }),
+    ).toBeNull();
+  });
+
+  it("ignores invalid database URL strings", () => {
+    expect(
+      getPrismaDatabaseUrl({
+        DIRECT_URL: "not-a-url",
+        DATABASE_URL: "still-not-a-url",
+      }),
+    ).toBeNull();
+  });
 });
