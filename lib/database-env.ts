@@ -27,6 +27,62 @@ function isSupportedDatabaseProtocol(value: string) {
   }
 }
 
+export interface ResolvedDatabaseConfig {
+  key: string;
+  value: string;
+}
+
+function isVercelEnvironment(environment: EnvironmentLike) {
+  const value = normalizeOptionalEnvironmentValue(environment.VERCEL);
+  return value === "1" || value === "true";
+}
+
+function getRuntimeDatabaseKeys(environment: EnvironmentLike) {
+  if (isVercelEnvironment(environment)) {
+    return [
+      "DIVINEDESK_DATABASE_URL",
+      "POSTGRES_URL",
+      "DATABASE_URL",
+      "POSTGRES_URL_NON_POOLING",
+      "DATABASE_URL_UNPOOLED",
+      "POSTGRES_PRISMA_URL",
+      "DIRECT_URL",
+    ] as const;
+  }
+
+  return [
+    "DIVINEDESK_DATABASE_URL",
+    "DATABASE_URL",
+    "POSTGRES_URL",
+    "DATABASE_URL_UNPOOLED",
+    "POSTGRES_URL_NON_POOLING",
+    "POSTGRES_PRISMA_URL",
+    "DIRECT_URL",
+  ] as const;
+}
+
+function getPrismaDatabaseKeys(environment: EnvironmentLike) {
+  if (isVercelEnvironment(environment)) {
+    return [
+      "POSTGRES_PRISMA_URL",
+      "POSTGRES_URL_NON_POOLING",
+      "DIRECT_URL",
+      "DATABASE_URL_UNPOOLED",
+      "DATABASE_URL",
+      "POSTGRES_URL",
+    ] as const;
+  }
+
+  return [
+    "DIRECT_URL",
+    "POSTGRES_PRISMA_URL",
+    "DATABASE_URL_UNPOOLED",
+    "POSTGRES_URL_NON_POOLING",
+    "DATABASE_URL",
+    "POSTGRES_URL",
+  ] as const;
+}
+
 function getFirstConfiguredValue(
   environment: EnvironmentLike,
   keys: readonly string[],
@@ -41,29 +97,38 @@ function getFirstConfiguredValue(
   return null;
 }
 
-const RUNTIME_DATABASE_URL_KEYS = [
-  "DIVINEDESK_DATABASE_URL",
-  "DATABASE_URL",
-  "POSTGRES_URL",
-  "DATABASE_URL_UNPOOLED",
-  "POSTGRES_URL_NON_POOLING",
-  "POSTGRES_PRISMA_URL",
-  "DIRECT_URL",
-] as const;
-
-const PRISMA_DATABASE_URL_KEYS = [
-  "DIRECT_URL",
-  "POSTGRES_PRISMA_URL",
-  "DATABASE_URL_UNPOOLED",
-  "POSTGRES_URL_NON_POOLING",
-  "DATABASE_URL",
-  "POSTGRES_URL",
-] as const;
-
 export function getRuntimeDatabaseUrl(environment: EnvironmentLike = process.env) {
-  return getFirstConfiguredValue(environment, RUNTIME_DATABASE_URL_KEYS);
+  return getFirstConfiguredValue(environment, getRuntimeDatabaseKeys(environment));
 }
 
 export function getPrismaDatabaseUrl(environment: EnvironmentLike = process.env) {
-  return getFirstConfiguredValue(environment, PRISMA_DATABASE_URL_KEYS);
+  return getFirstConfiguredValue(environment, getPrismaDatabaseKeys(environment));
+}
+
+export function getResolvedRuntimeDatabaseConfig(
+  environment: EnvironmentLike = process.env,
+): ResolvedDatabaseConfig | null {
+  for (const key of getRuntimeDatabaseKeys(environment)) {
+    const value = normalizeOptionalEnvironmentValue(environment[key]);
+
+    if (value && isSupportedDatabaseProtocol(value) && !isPlaceholderDatabaseUrl(value)) {
+      return { key, value };
+    }
+  }
+
+  return null;
+}
+
+export function getResolvedPrismaDatabaseConfig(
+  environment: EnvironmentLike = process.env,
+): ResolvedDatabaseConfig | null {
+  for (const key of getPrismaDatabaseKeys(environment)) {
+    const value = normalizeOptionalEnvironmentValue(environment[key]);
+
+    if (value && isSupportedDatabaseProtocol(value) && !isPlaceholderDatabaseUrl(value)) {
+      return { key, value };
+    }
+  }
+
+  return null;
 }

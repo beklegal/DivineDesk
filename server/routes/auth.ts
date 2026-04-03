@@ -31,7 +31,12 @@ import {
   verifyPassword,
   verifySessionToken,
 } from "../../lib/auth.js";
-import { getPrismaDatabaseUrl, getRuntimeDatabaseUrl } from "../../lib/database-env.js";
+import {
+  getPrismaDatabaseUrl,
+  getResolvedPrismaDatabaseConfig,
+  getResolvedRuntimeDatabaseConfig,
+  getRuntimeDatabaseUrl,
+} from "../../lib/database-env.js";
 
 const loginRequestSchema = z.object({
   email: z.string().trim().email("A valid email address is required"),
@@ -253,6 +258,8 @@ function logAuthWarn(scope: string, details: Record<string, unknown>) {
 export const handleDebugEnv: RequestHandler = (req, res) => {
   const runtimeDatabaseUrl = getRuntimeDatabaseUrl();
   const prismaDatabaseUrl = getPrismaDatabaseUrl();
+  const runtimeDatabaseConfig = getResolvedRuntimeDatabaseConfig();
+  const prismaDatabaseConfig = getResolvedPrismaDatabaseConfig();
 
   console.info(`[debug-env] hit path=${req.path} url=${req.originalUrl}`);
   res.json({
@@ -261,6 +268,8 @@ export const handleDebugEnv: RequestHandler = (req, res) => {
     databaseMode: runtimeDatabaseUrl ? "external" : "file_fallback",
     hasDatabaseUrl: Boolean(runtimeDatabaseUrl),
     hasPrismaDatabaseUrl: Boolean(prismaDatabaseUrl),
+    runtimeDatabaseSource: runtimeDatabaseConfig?.key ?? null,
+    prismaDatabaseSource: prismaDatabaseConfig?.key ?? null,
     databaseUrl: process.env.DATABASE_URL ? "set" : "missing",
     directUrl: process.env.DIRECT_URL ? "set" : "missing",
     postgresUrl: process.env.POSTGRES_URL ? "set" : "missing",
