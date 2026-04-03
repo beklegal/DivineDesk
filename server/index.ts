@@ -99,7 +99,15 @@ export function createServer() {
 
     next();
   });
-  app.use(authenticate);
+  app.use((req: any, res, next) => {
+    const publicPaths = ["/api/ping", "/api/demo", "/api/debug-env", "/api/auth/login", "/api/auth/signup", "/api/auth/demo"];
+
+    if (publicPaths.includes(req.path)) {
+      return next();
+    }
+
+    return authenticate(req, res, next);
+  });
 
   // ============= Authentication Routes =============
   app.post("/api/auth/login", handleLogin);
