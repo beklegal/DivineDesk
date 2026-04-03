@@ -1,8 +1,6 @@
-import serverless from "serverless-http";
 import { createServer } from "../server/index.js";
 
 const app = createServer();
-const handler = serverless(app);
 
 export default async function vercelApiHandler(req: any, res: any) {
   const originalUrl = typeof req.url === "string" ? req.url : null;
@@ -39,5 +37,5 @@ export default async function vercelApiHandler(req: any, res: any) {
   });
 
   req.requestId = requestId;
-  return handler(req, res);
+  return app(req, res);
 }
