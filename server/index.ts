@@ -159,6 +159,8 @@ export function createServer() {
     res.json({ message: ping });
   });
 
+  app.get("/api/debug-env", handleDebugEnv);
+
   app.get("/api/demo", handleDemo);
   app.use("/api", (req: any, res) => {
     console.warn(

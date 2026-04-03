@@ -249,6 +249,24 @@ function logAuthWarn(scope: string, details: Record<string, unknown>) {
   console.warn(`[auth] ${scope} ${JSON.stringify(details)}`);
 }
 
+export const handleDebugEnv: RequestHandler = (_req, res) => {
+  res.json({
+    ok: true,
+    nodeEnv: process.env.NODE_ENV ?? null,
+    hasDatabaseUrl: Boolean(
+      process.env.DATABASE_URL ||
+      process.env.POSTGRES_URL ||
+      process.env.POSTGRES_URL_NON_POOLING ||
+      process.env.DATABASE_URL_UNPOOLED,
+    ),
+    databaseUrl: process.env.DATABASE_URL ? "set" : "missing",
+    directUrl: process.env.DIRECT_URL ? "set" : "missing",
+    postgresUrl: process.env.POSTGRES_URL ? "set" : "missing",
+    postgresPrismaUrl: process.env.POSTGRES_PRISMA_URL ? "set" : "missing",
+    jwtSecret: process.env.JWT_SECRET ? "set" : "missing",
+  });
+};
+
 function maskEmail(email: string) {
   const [localPart, domainPart] = email.split("@");
   if (!localPart || !domainPart) {
