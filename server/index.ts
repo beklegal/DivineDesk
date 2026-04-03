@@ -8,6 +8,7 @@ import {
   handleSignUp,
   handleLogout,
   handleGetMe,
+  handleDebugEnv,
   authenticate,
 } from "./routes/auth.js";
 import {
