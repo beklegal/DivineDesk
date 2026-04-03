@@ -1,5 +1,3 @@
-import { createServer } from "../server/index.js";
+import { createVercelApiHandler } from "./_vercelApi.js";
 
-const app = createServer();
-
-export default app;
+export default createVercelApiHandler("/api");
